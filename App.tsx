@@ -1,0 +1,225 @@
+import { useState, useCallback, useEffect } from 'react';
+import { StyleSheet, View, Text, TouchableOpacity, Dimensions } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
+import { NavigationContainer } from '@react-navigation/native';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import * as SplashScreen from 'expo-splash-screen';
+import { useFonts } from 'expo-font';
+import {
+  PlayfairDisplay_600SemiBold,
+  PlayfairDisplay_700Bold,
+  PlayfairDisplay_900Black
+} from '@expo-google-fonts/playfair-display';
+import { Allura_400Regular } from '@expo-google-fonts/allura';
+import {
+  Inter_400Regular,
+  Inter_600SemiBold,
+  Inter_700Bold
+} from '@expo-google-fonts/inter';
+import { Feather } from '@expo/vector-icons';
+
+import { ChatScreen, ServicesScreen, ProfileScreen, WelcomeScreen, HomeScreen, AuthScreen, QuizScreen } from './src/screens';
+import { colors, spacing, typography } from './src/theme';
+import { supabase } from './src/services/supabase';
+import { Session } from '@supabase/supabase-js';
+
+// const { width } = Dimensions.get('window');
+const Tab = createBottomTabNavigator();
+
+// Keep the splash screen visible while we fetch resources
+SplashScreen.preventAutoHideAsync();
+
+function CustomTabBar({ state, descriptors, navigation }: any) {
+  return (
+    <View style={styles.tabBarContainer}>
+      <View style={styles.tabBar}>
+        {state.routes.map((route: any, index: number) => {
+          // const { options } = descriptors[route.key];
+          const isFocused = state.index === index;
+
+          const onPress = () => {
+            const event = navigation.emit({
+              type: 'tabPress',
+              target: route.key,
+              canPreventDefault: true,
+            });
+
+            if (!isFocused && !event.defaultPrevented) {
+              navigation.navigate(route.name);
+            }
+          };
+
+          const icons: any = {
+            Home: 'home',
+            Chat: 'message-circle',
+            Services: 'layers',
+            Profile: 'user',
+          };
+
+          return (
+            <TouchableOpacity
+              key={state.routes[index].key}
+              onPress={onPress}
+              style={styles.tabItem}
+              activeOpacity={0.7}
+            >
+              <Feather
+                name={icons[route.name]}
+                size={20}
+                color={isFocused ? colors.cyberPink : colors.textOnDark}
+                style={[styles.tabIcon, isFocused && styles.tabIconActive]}
+              />
+              <Text style={[styles.tabLabel, isFocused && styles.tabLabelActive]}>
+                {route.name.toUpperCase()}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+export default function App() {
+  const [showWelcome, setShowWelcome] = useState(true);
+  const [quizCompleted, setQuizCompleted] = useState<boolean | null>(null);
+
+  const [fontsLoaded] = useFonts({
+    PlayfairDisplay_600SemiBold,
+    PlayfairDisplay_700Bold,
+    PlayfairDisplay_900Black,
+    Allura_400Regular,
+    Inter_400Regular,
+    Inter_600SemiBold,
+    Inter_700Bold,
+  });
+
+  const [session, setSession] = useState<Session | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (session) {
+        checkQuizStatus(session);
+      }
+    });
+
+    supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      if (session) {
+        checkQuizStatus(session);
+      } else {
+        setQuizCompleted(null);
+      }
+    });
+  }, []);
+
+  const checkQuizStatus = (session: Session) => {
+    const completed = session.user.user_metadata?.quiz_completed;
+    setQuizCompleted(!!completed);
+  };
+
+  const onLayoutRootView = useCallback(async () => {
+    if (fontsLoaded) {
+      await SplashScreen.hideAsync();
+    }
+  }, [fontsLoaded]);
+
+  if (!fontsLoaded) {
+    return null;
+  }
+
+  if (showWelcome) {
+    return (
+      <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
+        <WelcomeScreen onFinish={() => setShowWelcome(false)} />
+      </View>
+    );
+  }
+
+  if (!session) {
+    return (
+      <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
+        <AuthScreen />
+      </View>
+    );
+  }
+
+  if (quizCompleted === false) {
+    return (
+      <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
+        <QuizScreen
+          navigation={null}
+          onComplete={() => setQuizCompleted(true)}
+        />
+      </View>
+    );
+  }
+
+  return (
+    <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
+      <NavigationContainer>
+        <StatusBar style="light" />
+        <Tab.Navigator
+          tabBar={(props) => <CustomTabBar {...props} />}
+          screenOptions={{
+            headerShown: false, // Custom headers per screen
+          }}
+        >
+          <Tab.Screen name="Home" component={HomeScreen} />
+          <Tab.Screen name="Chat" component={ChatScreen} />
+          <Tab.Screen name="Services" component={ServicesScreen} />
+          <Tab.Screen name="Profile" component={ProfileScreen} />
+        </Tab.Navigator>
+      </NavigationContainer>
+    </View>
+  );
+}
+
+
+const styles = StyleSheet.create({
+  tabBarContainer: {
+    position: 'absolute',
+    bottom: spacing.xl,
+    left: spacing.xl,
+    right: spacing.xl,
+    alignItems: 'center',
+  },
+  tabBar: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(20, 10, 30, 0.85)', // More discrete glass
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: 40,
+    width: '100%',
+    justifyContent: 'space-around',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 0, 255, 0.1)',
+  },
+  tabItem: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tabIcon: {
+    opacity: 0.4,
+    marginBottom: 4,
+  },
+  tabIconActive: {
+    opacity: 1,
+    transform: [{ scale: 1.1 }],
+    textShadowColor: colors.cyberPink,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 10,
+  },
+  tabLabel: {
+    ...typography.labelCaps,
+    fontSize: 9,
+    color: colors.textOnDark,
+    opacity: 0.4,
+  },
+  tabLabelActive: {
+    opacity: 1,
+    color: colors.cyberPink,
+  },
+});
+
