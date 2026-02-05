@@ -1,8 +1,9 @@
-import { ScrollView, StyleSheet, Text, View, Dimensions, TouchableOpacity, Alert } from 'react-native';
+import { useState } from 'react';
+import { ScrollView, StyleSheet, Text, View, Dimensions, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { colors, spacing, typography } from '../theme';
-import { PageHeader } from '../components';
+import { PageHeader, Toast } from '../components';
 import { Feather } from '@expo/vector-icons';
 import { supabase } from '../services/supabase';
 
@@ -67,13 +68,25 @@ const PRICING = [
 ];
 
 export function ServicesScreen() {
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error'; visible: boolean }>({
+    message: '',
+    type: 'success',
+    visible: false,
+  });
+
   async function handleLogout() {
     const { error } = await supabase.auth.signOut();
-    if (error) Alert.alert('Error', error.message);
+    if (error) setToast({ message: error.message, type: 'error', visible: true });
   }
 
   return (
     <View style={{ flex: 1 }}>
+      <Toast
+        visible={toast.visible}
+        message={toast.message}
+        type={toast.type}
+        onHide={() => setToast(prev => ({ ...prev, visible: false }))}
+      />
       <PageHeader
         title="Services"
         rightIcon="log-out"

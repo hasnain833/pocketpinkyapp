@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState, useCallback, useMemo } from 'react';
 import {
     StyleSheet,
     Text,
@@ -7,11 +7,10 @@ import {
     Animated,
     PanResponder,
     TouchableOpacity,
-    Alert
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, spacing, typography } from '../theme';
-import { PageHeader } from '../components';
+import { PageHeader, Toast } from '../components';
 import { Feather } from '@expo/vector-icons';
 import { supabase } from '../services/supabase';
 
@@ -54,13 +53,18 @@ const LOOKBOOK_ITEMS = [
 ];
 
 export function HomeScreen() {
+    const [toast, setToast] = useState<{ message: string; type: 'success' | 'error'; visible: boolean }>({
+        message: '',
+        type: 'success',
+        visible: false,
+    });
     const [data, setData] = useState(LOOKBOOK_ITEMS);
     const position = useRef(new Animated.ValueXY()).current;
     const [index, setIndex] = useState(0);
 
     async function handleLogout() {
         const { error } = await supabase.auth.signOut();
-        if (error) Alert.alert('Error', error.message);
+        if (error) setToast({ message: error.message, type: 'error', visible: true });
     }
 
     const forceSwipe = (direction: string) => {
@@ -73,8 +77,8 @@ export function HomeScreen() {
     };
 
     const onSwipeComplete = useCallback((direction: string) => {
-        setIndex(prev => (prev + 1) % data.length);
         position.setValue({ x: 0, y: 0 });
+        setIndex(prev => (prev + 1) % data.length);
     }, [data.length, position]);
 
     const resetPosition = () => {
@@ -102,16 +106,26 @@ export function HomeScreen() {
         })
     ).current;
 
-    const getCardStyle = () => {
+    const frontCardStyle = useMemo(() => {
         const rotate = position.x.interpolate({
             inputRange: [-width * 1.5, 0, width * 1.5],
             outputRange: ['-30deg', '0deg', '30deg'],
         });
-
         return {
             transform: [...position.getTranslateTransform(), { rotate }],
         };
-    };
+    }, [position]);
+
+    const backCardStyle1 = useMemo(() => ({
+        zIndex: -1,
+        transform: [{ scale: 0.95 }, { translateY: -20 }],
+        opacity: 0.8,
+    }), []);
+    const backCardStyle2 = useMemo(() => ({
+        zIndex: -2,
+        transform: [{ scale: 0.9 }, { translateY: -40 }],
+        opacity: 0.6,
+    }), []);
 
     const renderCards = () => {
         const cards = [];
@@ -124,28 +138,26 @@ export function HomeScreen() {
                 cards.push(
                     <Animated.View
                         key={item.id}
-                        style={[getCardStyle(), styles.cardWrapper]}
+                        style={[frontCardStyle, styles.cardWrapper]}
                         {...panResponder.panHandlers}
                     >
                         <CardContent item={item} index={itemIndex} />
                     </Animated.View>
                 );
-            } else if (i < 3) {
-                // Background cards (Showing only 2 behind the front card)
+            } else if (i === 1) {
                 cards.push(
                     <Animated.View
                         key={item.id}
-                        style={[
-                            styles.cardWrapper,
-                            {
-                                zIndex: -i,
-                                transform: [
-                                    { scale: 1 - i * 0.05 },
-                                    { translateY: i * -20 }
-                                ],
-                                opacity: 1 - i * 0.2
-                            }
-                        ]}
+                        style={[styles.cardWrapper, backCardStyle1]}
+                    >
+                        <CardContent item={item} index={itemIndex} />
+                    </Animated.View>
+                );
+            } else if (i === 2) {
+                cards.push(
+                    <Animated.View
+                        key={item.id}
+                        style={[styles.cardWrapper, backCardStyle2]}
                     >
                         <CardContent item={item} index={itemIndex} />
                     </Animated.View>
@@ -158,6 +170,12 @@ export function HomeScreen() {
 
     return (
         <View style={styles.container}>
+            <Toast
+                visible={toast.visible}
+                message={toast.message}
+                type={toast.type}
+                onHide={() => setToast(prev => ({ ...prev, visible: false }))}
+            />
             <PageHeader
                 title="Lookbook"
                 rightIcon="log-out"
@@ -170,7 +188,7 @@ export function HomeScreen() {
     );
 }
 
-function CardContent({ item, index }: { item: any, index: number }) {
+const CardContent = React.memo(function CardContent({ item, index }: { item: any, index: number }) {
     return (
         <LinearGradient
             colors={[item.bg, colors.dark]}
@@ -207,7 +225,7 @@ function CardContent({ item, index }: { item: any, index: number }) {
             <View style={[styles.cardBorder, { borderColor: item.color }]} />
         </LinearGradient>
     );
-}
+});
 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.dark },

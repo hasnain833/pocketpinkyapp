@@ -1,4 +1,5 @@
 import 'react-native-url-polyfill/auto';
+import Constants from 'expo-constants';
 import * as SecureStore from 'expo-secure-store';
 import { createClient } from '@supabase/supabase-js';
 
@@ -14,8 +15,9 @@ const ExpoSecureStoreAdapter = {
     },
 };
 
-const supabaseUrl = 'https://skqnatchmwomhyabeiim.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNrcW5hdGNobXdvbWh5YWJlaWltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAxODYzMzMsImV4cCI6MjA4NTc2MjMzM30.dksrzg62kSYuFG6auyqHpc8mkUxNnUdyhP8kkXT3wi8';
+const extra = Constants.expoConfig?.extra as { supabaseUrl?: string; supabaseAnonKey?: string } | undefined;
+const supabaseUrl = extra?.supabaseUrl ?? '';
+const supabaseAnonKey = extra?.supabaseAnonKey ?? '';
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     auth: {

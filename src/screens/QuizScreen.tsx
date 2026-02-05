@@ -9,12 +9,12 @@ import {
     SafeAreaView,
     Platform,
     StatusBar,
-    Alert
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { Feather } from '@expo/vector-icons';
 import { colors, spacing, typography } from '../theme';
+import { Toast } from '../components';
 import { supabase } from '../services/supabase';
 
 const { width, height } = Dimensions.get('window');
@@ -97,6 +97,11 @@ const QUESTIONS: Question[] = [
 ];
 
 export function QuizScreen({ navigation, onComplete }: { navigation: any, onComplete: () => void }) {
+    const [toast, setToast] = useState<{ message: string; type: 'success' | 'error'; visible: boolean }>({
+        message: '',
+        type: 'success',
+        visible: false,
+    });
     const [currentIndex, setCurrentIndex] = useState(0);
     const [answers, setAnswers] = useState<Record<string, string>>({});
 
@@ -174,13 +179,19 @@ export function QuizScreen({ navigation, onComplete }: { navigation: any, onComp
             }
             onComplete(); // Navigate to main app
         } catch (error: any) {
-            Alert.alert("Error Saving Quiz", error.message);
+            setToast({ message: error?.message ?? 'Error saving quiz', type: 'error', visible: true });
             onComplete(); // Let them through anyway fallback
         }
     };
 
     return (
         <View style={styles.container}>
+            <Toast
+                visible={toast.visible}
+                message={toast.message}
+                type={toast.type}
+                onHide={() => setToast(prev => ({ ...prev, visible: false }))}
+            />
             <StatusBar barStyle="light-content" />
             <LinearGradient
                 colors={[colors.dark, '#1a0b2e']}

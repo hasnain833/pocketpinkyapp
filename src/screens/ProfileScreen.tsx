@@ -1,15 +1,13 @@
 import { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Image, TextInput, Alert, ActivityIndicator, Linking, Modal, Switch, Platform } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Image, TextInput, ActivityIndicator, Linking, Modal, Switch, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { Feather } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { decode } from 'base64-arraybuffer';
-
 import { colors, spacing, typography } from '../theme';
-import { PageHeader } from '../components';
+import { PageHeader, Toast } from '../components';
 import { supabase } from '../services/supabase';
-
 
 
 export function ProfileScreen() {
@@ -26,6 +24,11 @@ export function ProfileScreen() {
     bio: '',
   });
 
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error'; visible: boolean }>({
+    message: '',
+    type: 'success',
+    visible: false,
+  });
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState({
     messages: true,
@@ -108,9 +111,9 @@ export function ProfileScreen() {
       });
 
       setIsEditing(false);
-      Alert.alert('Success', 'Profile updated!');
+      setToast({ message: 'Profile updated!', type: 'success', visible: true });
     } catch (error: any) {
-      Alert.alert('Error', error.message);
+      setToast({ message: error?.message ?? 'Something went wrong', type: 'error', visible: true });
     } finally {
       setLoading(false);
     }
@@ -120,7 +123,7 @@ export function ProfileScreen() {
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission needed', 'Allow access to photos to change your avatar.');
+        setToast({ message: 'Allow access to photos to change your avatar.', type: 'error', visible: true });
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -135,7 +138,7 @@ export function ProfileScreen() {
         await uploadImage(result.assets[0].base64);
       }
     } catch (error: any) {
-      Alert.alert('Error', error?.message ?? 'Could not open image picker');
+      setToast({ message: error?.message ?? 'Could not open image picker', type: 'error', visible: true });
     }
   }
 
@@ -160,7 +163,7 @@ export function ProfileScreen() {
 
       setProfile(prev => ({ ...prev, avatarUrl: publicUrl }));
     } catch (error: any) {
-      Alert.alert('Upload Error', error?.message ?? 'Upload failed');
+      setToast({ message: error?.message ?? 'Upload failed', type: 'error', visible: true });
     } finally {
       setUploading(false);
     }
@@ -178,11 +181,17 @@ export function ProfileScreen() {
 
   async function handleLogout() {
     const { error } = await supabase.auth.signOut();
-    if (error) Alert.alert('Error', error.message);
+    if (error) setToast({ message: error.message, type: 'error', visible: true });
   }
 
   return (
     <View style={{ flex: 1 }}>
+      <Toast
+        visible={toast.visible}
+        message={toast.message}
+        type={toast.type}
+        onHide={() => setToast(prev => ({ ...prev, visible: false }))}
+      />
       <PageHeader
         title="Profile"
         rightIcon="log-out"
@@ -227,9 +236,6 @@ export function ProfileScreen() {
             </LinearGradient>
           </TouchableOpacity>
           <Text style={styles.heroName}>{profile.name || 'Queen'}</Text>
-          <Text style={styles.heroMeta}>
-            {profile.age ? `${profile.age} yrs` : '—'} • {profile.bio || 'Digital Nomad'}
-          </Text>
           {!isEditing && (
             <TouchableOpacity
               style={styles.heroEditButton}
@@ -360,14 +366,6 @@ export function ProfileScreen() {
             <Feather name="chevron-right" size={20} color="rgba(255,255,255,0.4)" />
           </TouchableOpacity>
         </View>
-
-        {/* Footer */}
-        <View style={styles.footer}>
-          <Text style={styles.footerTagline}>Your AI Big Sister for Dating Clarity.</Text>
-          <Text style={styles.footerLogo}>Pinky.</Text>
-        </View>
-
-        <View style={styles.bottomSpacer} />
       </ScrollView>
 
       {/* Notification Settings Modal */}
@@ -578,13 +576,12 @@ const styles = StyleSheet.create({
     ...typography.body,
     fontSize: 15,
     color: colors.textOnDark,
-    lineHeight: 22,
+    lineHeight: 10,
   },
   aboutMeta: {
     ...typography.bodySmall,
     fontSize: 12,
     color: 'rgba(255,255,255,0.5)',
-    marginTop: spacing.xs,
   },
   aboutEditForm: {
     gap: spacing.sm,

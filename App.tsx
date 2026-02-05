@@ -30,6 +30,9 @@ const Tab = createBottomTabNavigator();
 SplashScreen.preventAutoHideAsync();
 
 function CustomTabBar({ state, descriptors, navigation }: any) {
+  const currentRoute = state.routes[state.index]?.name;
+  if (currentRoute === 'Chat') return null;
+
   return (
     <View style={styles.tabBarContainer}>
       <View style={styles.tabBar}>
@@ -97,14 +100,22 @@ export default function App() {
   const [session, setSession] = useState<Session | null>(null);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      if (session) {
-        checkQuizStatus(session);
-      }
-    });
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => {
+        setSession(session);
+        if (session) {
+          checkQuizStatus(session);
+        }
+      })
+      .catch((err: any) => {
+        // Invalid/expired refresh token – clear session and show login
+        const msg = err?.message ?? '';
+        if (msg.includes('Refresh Token') || msg.includes('refresh_token') || err?.name === 'AuthApiError') {
+          supabase.auth.signOut().then(() => setSession(null)).catch(() => setSession(null));
+        }
+      });
 
-    supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       if (session) {
         checkQuizStatus(session);
@@ -112,6 +123,8 @@ export default function App() {
         setQuizCompleted(null);
       }
     });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const checkQuizStatus = (session: Session) => {

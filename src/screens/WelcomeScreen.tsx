@@ -32,16 +32,28 @@ export function WelcomeScreen({ onFinish }: WelcomeScreenProps) {
             }),
         ]).start();
 
-        // Human-like typewriter effect
+        // Smooth handwritten-style typing: gentle variation, no jarring pauses
         let currentIndex = 0;
+        const baseLetterMs = 115;
+        const basePauseMs = 200;
         const typeNext = () => {
             if (currentIndex < fullText.length) {
                 currentIndex++;
                 setDisplayedText(fullText.slice(0, currentIndex));
 
-                // Random delay between 50ms and 180ms for natural feel
-                const delay = 50 + Math.random() * 130;
-                setTimeout(typeNext, delay);
+                const nextChar = fullText[currentIndex];
+                const isAfterSpace = fullText[currentIndex - 1] === ' ';
+                const isBeforeSpaceOrEnd = nextChar === ' ' || currentIndex === fullText.length;
+
+                let delay: number;
+                if (isAfterSpace) {
+                    delay = basePauseMs + (Math.random() - 0.5) * 50;
+                } else if (isBeforeSpaceOrEnd) {
+                    delay = baseLetterMs + 60 + (Math.random() - 0.5) * 40;
+                } else {
+                    delay = baseLetterMs + (Math.random() - 0.5) * 36;
+                }
+                setTimeout(typeNext, Math.round(delay));
             } else {
                 // Typing finished -> draw underline
                 Animated.sequence([

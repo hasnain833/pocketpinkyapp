@@ -8,14 +8,19 @@ import {
     KeyboardAvoidingView,
     Platform,
     ScrollView,
-    Alert,
     ActivityIndicator
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, spacing, typography } from '../theme';
+import { Toast } from '../components';
 import { supabase } from '../services/supabase';
 
 export function AuthScreen() {
+    const [toast, setToast] = useState<{ message: string; type: 'success' | 'error'; visible: boolean }>({
+        message: '',
+        type: 'success',
+        visible: false,
+    });
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -28,24 +33,25 @@ export function AuthScreen() {
 
     async function handleAuth() {
         if (!email || !password) {
-            Alert.alert('Error', 'Please fill in all fields');
+            setToast({ message: 'Please fill in all fields', type: 'error', visible: true });
             return;
         }
 
         if (isSignUp) {
             if (!name) {
-                Alert.alert('Error', 'Please enter your name');
+                setToast({ message: 'Please enter your name', type: 'error', visible: true });
                 return;
             }
             if (password !== confirmPassword) {
-                Alert.alert('Error', 'Passwords do not match');
+                setToast({ message: 'Passwords do not match', type: 'error', visible: true });
                 return;
             }
             if (!passwordRegex.test(password)) {
-                Alert.alert(
-                    'Weak Password',
-                    'Password must be at least 8 characters long, contain 1 uppercase letter, and 1 special character (!@#$&*).'
-                );
+                setToast({
+                    message: 'Password must be at least 8 characters, 1 uppercase, and 1 special character (!@#$&*).',
+                    type: 'error',
+                    visible: true,
+                });
                 return;
             }
         }
@@ -59,17 +65,23 @@ export function AuthScreen() {
                     data: { full_name: name }
                 }
             });
-            if (error) Alert.alert('Error', error.message);
-            else Alert.alert('Success', 'Check your email for the confirmation link!');
+            if (error) setToast({ message: error.message, type: 'error', visible: true });
+            else setToast({ message: 'Check your email for the confirmation link!', type: 'success', visible: true });
         } else {
             const { error } = await supabase.auth.signInWithPassword({ email, password });
-            if (error) Alert.alert('Error', error.message);
+            if (error) setToast({ message: error.message, type: 'error', visible: true });
         }
         setLoading(false);
     }
 
     return (
         <View style={styles.container}>
+            <Toast
+                visible={toast.visible}
+                message={toast.message}
+                type={toast.type}
+                onHide={() => setToast(prev => ({ ...prev, visible: false }))}
+            />
             <LinearGradient
                 colors={[colors.deepNight, colors.dark]}
                 style={styles.gradient}
