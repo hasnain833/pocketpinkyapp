@@ -1,5 +1,6 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, Dimensions } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -22,8 +23,10 @@ import { ChatScreen, ServicesScreen, ProfileScreen, WelcomeScreen, HomeScreen, A
 import { colors, spacing, typography } from './src/theme';
 import { supabase } from './src/services/supabase';
 import { Session } from '@supabase/supabase-js';
+import * as Notifications from 'expo-notifications';
+import { registerForPushNotifications, addNotificationReceivedListener, addNotificationResponseListener } from './src/services/notifications';
 
-// const { width } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 const Tab = createBottomTabNavigator();
 
 // Keep the splash screen visible while we fetch resources
@@ -86,6 +89,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
 export default function App() {
   const [showWelcome, setShowWelcome] = useState(true);
   const [quizCompleted, setQuizCompleted] = useState<boolean | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
 
   const [fontsLoaded] = useFonts({
     PlayfairDisplay_600SemiBold,
@@ -97,40 +101,62 @@ export default function App() {
     Inter_700Bold,
   });
 
-  const [session, setSession] = useState<Session | null>(null);
+  const checkQuizStatus = useCallback((session: Session) => {
+    const completed = session.user.user_metadata?.quiz_completed;
+    if (quizCompleted !== !!completed) {
+      setQuizCompleted(!!completed);
+    }
+  }, [quizCompleted]);
+
+  const lastToken = useRef<string | null>(null);
 
   useEffect(() => {
+    console.log('[App] MOUNTED');
+
     supabase.auth.getSession()
       .then(({ data: { session } }) => {
-        setSession(session);
         if (session) {
+          console.log('[App] Initial Session Found:', session.user.email);
+          lastToken.current = session.access_token;
+          setSession(session);
           checkQuizStatus(session);
-        }
-      })
-      .catch((err: any) => {
-        // Invalid/expired refresh token – clear session and show login
-        const msg = err?.message ?? '';
-        if (msg.includes('Refresh Token') || msg.includes('refresh_token') || err?.name === 'AuthApiError') {
-          supabase.auth.signOut().then(() => setSession(null)).catch(() => setSession(null));
+          registerForPushNotifications().catch(() => { });
         }
       });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      // Prevent redundant re-renders if the session token hasn't changed
+      if (session?.access_token === lastToken.current && _event !== 'SIGNED_OUT') {
+        return;
+      }
+
+      console.log(`[App] Auth State Change Event: ${_event}`);
+      lastToken.current = session?.access_token || null;
       setSession(session);
+
       if (session) {
         checkQuizStatus(session);
+        registerForPushNotifications().catch(() => { });
       } else {
         setQuizCompleted(null);
       }
     });
 
-    return () => subscription.unsubscribe();
-  }, []);
+    const notificationListener = addNotificationReceivedListener(notification => {
+      console.log('Notification received:', notification);
+    });
 
-  const checkQuizStatus = (session: Session) => {
-    const completed = session.user.user_metadata?.quiz_completed;
-    setQuizCompleted(!!completed);
-  };
+    const responseListener = addNotificationResponseListener(response => {
+      console.log('Notification tapped:', response);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+      notificationListener.remove();
+      responseListener.remove();
+    };
+  }, [checkQuizStatus]);
+
 
   const onLayoutRootView = useCallback(async () => {
     if (fontsLoaded) {
@@ -138,46 +164,23 @@ export default function App() {
     }
   }, [fontsLoaded]);
 
-  if (!fontsLoaded) {
-    return null;
-  }
+  if (!fontsLoaded) return null;
 
+  // Render logic moved directly into the function body to avoid anti-pattern
+  let mainContent;
   if (showWelcome) {
-    return (
-      <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
-        <WelcomeScreen onFinish={() => setShowWelcome(false)} />
-      </View>
-    );
-  }
-
-  if (!session) {
-    return (
-      <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
-        <AuthScreen />
-      </View>
-    );
-  }
-
-  if (quizCompleted === false) {
-    return (
-      <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
-        <QuizScreen
-          navigation={null}
-          onComplete={() => setQuizCompleted(true)}
-        />
-      </View>
-    );
-  }
-
-  return (
-    <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
+    mainContent = <WelcomeScreen onFinish={() => setShowWelcome(false)} />;
+  } else if (!session) {
+    mainContent = <AuthScreen />;
+  } else if (quizCompleted === false) {
+    mainContent = <QuizScreen navigation={null} onComplete={() => setQuizCompleted(true)} />;
+  } else {
+    mainContent = (
       <NavigationContainer>
         <StatusBar style="light" />
         <Tab.Navigator
           tabBar={(props) => <CustomTabBar {...props} />}
-          screenOptions={{
-            headerShown: false, // Custom headers per screen
-          }}
+          screenOptions={{ headerShown: false }}
         >
           <Tab.Screen name="Home" component={HomeScreen} />
           <Tab.Screen name="Chat" component={ChatScreen} />
@@ -185,7 +188,15 @@ export default function App() {
           <Tab.Screen name="Profile" component={ProfileScreen} />
         </Tab.Navigator>
       </NavigationContainer>
-    </View>
+    );
+  }
+
+  return (
+    <SafeAreaProvider onLayout={onLayoutRootView}>
+      <View style={{ flex: 1 }}>
+        {mainContent}
+      </View>
+    </SafeAreaProvider>
   );
 }
 

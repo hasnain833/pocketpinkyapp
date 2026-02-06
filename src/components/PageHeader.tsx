@@ -1,6 +1,8 @@
 import { StyleSheet, Text, View, Platform, TouchableOpacity } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { colors, spacing, typography } from '../theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { responsiveFontSize, moderateScale } from '../theme/responsive';
 import { Feather } from '@expo/vector-icons';
 
 interface PageHeaderProps {
@@ -10,6 +12,7 @@ interface PageHeaderProps {
 }
 
 export function PageHeader({ title, rightIcon, onRightPress }: PageHeaderProps) {
+    const insets = useSafeAreaInsets();
     const Container = Platform.OS === 'ios' ? BlurView : View;
 
     return (
@@ -17,7 +20,12 @@ export function PageHeader({ title, rightIcon, onRightPress }: PageHeaderProps) 
             <Container
                 tint="dark"
                 intensity={80}
-                style={styles.container}
+                style={[
+                    styles.container,
+                    {
+                        paddingTop: Math.max(insets.top, spacing.md),
+                    }
+                ]}
             >
                 <Text style={styles.logo}>Pinky</Text>
                 {!rightIcon && (
@@ -52,8 +60,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        paddingTop: Platform.OS === 'ios' ? 60 : 40,
-        paddingBottom: spacing.md,
+        paddingBottom: moderateScale(spacing.md),
         paddingHorizontal: spacing.xl,
         backgroundColor: Platform.OS === 'ios' ? 'transparent' : 'rgba(15, 8, 20, 0.88)',
         borderBottomLeftRadius: 20,
@@ -65,7 +72,7 @@ const styles = StyleSheet.create({
     logo: {
         fontFamily: 'Allura_400Regular',
         color: colors.cyberPink,
-        fontSize: 28,
+        fontSize: responsiveFontSize(28),
         flex: 1,
     },
     titleWrapper: {
@@ -77,8 +84,6 @@ const styles = StyleSheet.create({
         ...typography.labelCaps,
         color: colors.textOnDark,
         opacity: 0.9,
-        fontSize: 10,
-        letterSpacing: 3,
     },
     dot: {
         width: 6,

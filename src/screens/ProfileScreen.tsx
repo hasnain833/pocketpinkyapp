@@ -5,9 +5,12 @@ import { BlurView } from 'expo-blur';
 import { Feather } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { decode } from 'base64-arraybuffer';
-import { colors, spacing, typography } from '../theme';
+import { colors, spacing, typography, radii } from '../theme';
+import { horizontalScale, verticalScale, moderateScale, responsiveFontSize } from '../theme/responsive';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PageHeader, Toast } from '../components';
 import { supabase } from '../services/supabase';
+import { updateNotificationPreferences } from '../services/notifications';
 
 
 export function ProfileScreen() {
@@ -36,6 +39,7 @@ export function ProfileScreen() {
     promos: false,
     vetting: true,
   });
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     fetchProfile();
@@ -71,6 +75,11 @@ export function ProfileScreen() {
           age: data.age || '',
           bio: data.bio || ''
         });
+
+        // Load notification preferences if they exist
+        if (data.notification_preferences) {
+          setNotifications(data.notification_preferences);
+        }
       }
     } catch (error) {
       console.log('Error fetching profile:', error);
@@ -199,7 +208,13 @@ export function ProfileScreen() {
       />
       <ScrollView
         style={styles.container}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[
+          styles.content,
+          {
+            paddingTop: insets.top + moderateScale(90),
+            paddingBottom: moderateScale(120),
+          }
+        ]}
         showsVerticalScrollIndicator={false}
       >
         {/* Hero: Avatar, name, meta, Edit profile */}
@@ -436,6 +451,29 @@ export function ProfileScreen() {
                   value={notifications.vetting}
                 />
               </View>
+
+              <TouchableOpacity
+                style={styles.savePreferencesButton}
+                onPress={async () => {
+                  try {
+                    await updateNotificationPreferences(profile.id, notifications);
+                    setToast({ message: 'Notification preferences saved!', type: 'success', visible: true });
+                    setShowNotifications(false);
+                  } catch (error: any) {
+                    setToast({ message: error?.message ?? 'Failed to save preferences', type: 'error', visible: true });
+                  }
+                }}
+              >
+                <LinearGradient
+                  colors={colors.gradients.vibrant}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.savePreferencesGradient}
+                >
+                  <Feather name="check" size={16} color={colors.textOnDark} />
+                  <Text style={styles.savePreferencesText}>SAVE PREFERENCES</Text>
+                </LinearGradient>
+              </TouchableOpacity>
             </View>
           </BlurView>
         </View>
@@ -453,7 +491,6 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: spacing.md,
-    paddingTop: Platform.OS === 'ios' ? 110 : 90,
     flexGrow: 1,
   },
 
@@ -467,30 +504,30 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   heroAvatarRing: {
-    width: 116,
-    height: 116,
-    borderRadius: 58,
+    width: moderateScale(116),
+    height: moderateScale(116),
+    borderRadius: moderateScale(58),
     padding: 3,
     alignItems: 'center',
     justifyContent: 'center',
   },
   heroAvatarInner: {
-    width: 106,
-    height: 106,
-    borderRadius: 53,
+    width: moderateScale(106),
+    height: moderateScale(106),
+    borderRadius: moderateScale(53),
     overflow: 'hidden',
     backgroundColor: 'rgba(0,0,0,0.3)',
     position: 'relative',
   },
   heroAvatar: {
-    width: 106,
-    height: 106,
-    borderRadius: 53,
+    width: moderateScale(106),
+    height: moderateScale(106),
+    borderRadius: moderateScale(53),
   },
   heroAvatarPlaceholder: {
-    width: 106,
-    height: 106,
-    borderRadius: 53,
+    width: moderateScale(106),
+    height: moderateScale(106),
+    borderRadius: moderateScale(53),
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.08)',
@@ -502,12 +539,12 @@ const styles = StyleSheet.create({
   },
   heroEditBadge: {
     position: 'absolute',
-    bottom: 6,
-    right: 6,
+    bottom: verticalScale(6),
+    right: horizontalScale(6),
     backgroundColor: colors.primary,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: moderateScale(28),
+    height: moderateScale(28),
+    borderRadius: moderateScale(14),
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
@@ -515,7 +552,6 @@ const styles = StyleSheet.create({
   },
   heroName: {
     ...typography.display,
-    fontSize: 26,
     color: colors.textOnDark,
     marginBottom: 4,
     textAlign: 'center',
@@ -567,16 +603,13 @@ const styles = StyleSheet.create({
   },
   aboutLabel: {
     ...typography.labelCaps,
-    fontSize: 11,
     color: 'rgba(255,255,255,0.5)',
     marginBottom: spacing.sm,
-    letterSpacing: 1.5,
   },
   aboutText: {
     ...typography.body,
-    fontSize: 15,
     color: colors.textOnDark,
-    lineHeight: 10,
+    lineHeight: responsiveFontSize(24),
   },
   aboutMeta: {
     ...typography.bodySmall,
@@ -588,14 +621,14 @@ const styles = StyleSheet.create({
   },
   aboutInput: {
     backgroundColor: 'rgba(0,0,0,0.35)',
-    borderRadius: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
+    borderRadius: radii.input,
+    paddingVertical: verticalScale(10),
+    paddingHorizontal: horizontalScale(14),
     color: colors.textOnDark,
     ...typography.bodySmall,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.12)',
-    fontSize: 14,
+    fontSize: responsiveFontSize(14),
   },
   aboutInputBio: {
     minHeight: 56,
@@ -659,16 +692,15 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   settingsRowIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: moderateScale(36),
+    height: moderateScale(36),
+    borderRadius: moderateScale(18),
     backgroundColor: 'rgba(255,20,147,0.15)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   settingsRowLabel: {
     ...typography.body,
-    fontSize: 15,
     color: colors.textOnDark,
   },
 
@@ -748,5 +780,27 @@ const styles = StyleSheet.create({
     color: colors.textOnDark,
     opacity: 0.5,
     fontSize: 12,
+  },
+  savePreferencesButton: {
+    marginTop: spacing.lg,
+    shadowColor: colors.cyberPink,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  savePreferencesGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    padding: spacing.lg,
+    borderRadius: 20,
+  },
+  savePreferencesText: {
+    ...typography.labelCaps,
+    color: colors.textOnDark,
+    fontSize: 13,
+    letterSpacing: 2,
   },
 });

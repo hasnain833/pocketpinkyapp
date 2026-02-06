@@ -11,8 +11,10 @@ import {
     ActivityIndicator
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { colors, spacing, typography } from '../theme';
-import { Toast } from '../components';
+import { colors, spacing, typography, radii } from '../theme';
+import { moderateScale, verticalScale, horizontalScale, responsiveFontSize } from '../theme/responsive';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Toast, ForgotPasswordModal } from '../components';
 import { supabase } from '../services/supabase';
 
 export function AuthScreen() {
@@ -27,9 +29,11 @@ export function AuthScreen() {
     const [confirmPassword, setConfirmPassword] = useState('');
     const [loading, setLoading] = useState(false);
     const [isSignUp, setIsSignUp] = useState(false);
+    const [showForgotPassword, setShowForgotPassword] = useState(false);
 
     // Password Validation Regex: At least 8 chars, 1 uppercase, 1 special char
     const passwordRegex = /^(?=.*[A-Z])(?=.*[!@#$&*])(?=.{8,})/;
+    const insets = useSafeAreaInsets();
 
     async function handleAuth() {
         if (!email || !password) {
@@ -82,6 +86,12 @@ export function AuthScreen() {
                 type={toast.type}
                 onHide={() => setToast(prev => ({ ...prev, visible: false }))}
             />
+            <ForgotPasswordModal
+                visible={showForgotPassword}
+                onClose={() => setShowForgotPassword(false)}
+                onSuccess={(message) => setToast({ message, type: 'success', visible: true })}
+                onError={(message) => setToast({ message, type: 'error', visible: true })}
+            />
             <LinearGradient
                 colors={[colors.deepNight, colors.dark]}
                 style={styles.gradient}
@@ -91,7 +101,13 @@ export function AuthScreen() {
                     style={styles.keyboardView}
                 >
                     <ScrollView
-                        contentContainerStyle={styles.scrollContent}
+                        contentContainerStyle={[
+                            styles.scrollContent,
+                            {
+                                paddingTop: insets.top + spacing.xl,
+                                paddingBottom: Math.max(insets.bottom, spacing.xxl),
+                            }
+                        ]}
                         showsVerticalScrollIndicator={false}
                     >
                         <View style={styles.header}>
@@ -162,6 +178,15 @@ export function AuthScreen() {
                                 </View>
                             )}
 
+                            {!isSignUp && (
+                                <TouchableOpacity
+                                    style={styles.forgotPasswordButton}
+                                    onPress={() => setShowForgotPassword(true)}
+                                >
+                                    <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+                                </TouchableOpacity>
+                            )}
+
                             <TouchableOpacity
                                 style={styles.button}
                                 onPress={handleAuth}
@@ -208,30 +233,26 @@ const styles = StyleSheet.create({
     keyboardView: { flex: 1 },
     scrollContent: {
         padding: spacing.xl,
-        paddingTop: 100,
-        paddingBottom: spacing.xxl,
         flexGrow: 1,
         justifyContent: 'center',
     },
     header: {
-        marginBottom: spacing.xxl * 1.5,
+        marginBottom: verticalScale(48),
         position: 'relative',
     },
     bgLogo: {
         ...typography.script,
-        fontSize: 120,
+        fontSize: moderateScale(120),
         color: colors.cyberPink,
         opacity: 0.1,
         position: 'absolute',
-        top: -60,
-        left: -20,
+        top: verticalScale(-40),
+        left: horizontalScale(-20),
         zIndex: 0,
     },
     editorialHeadline: {
         ...typography.display,
         color: colors.textOnDark,
-        fontSize: 48,
-        lineHeight: 52,
         zIndex: 1,
     },
     subheadline: {
@@ -250,18 +271,16 @@ const styles = StyleSheet.create({
     labelCaps: {
         ...typography.labelCaps,
         color: colors.cyberGold,
-        fontSize: 10,
-        letterSpacing: 2,
     },
     input: {
         backgroundColor: 'rgba(255,255,255,0.05)',
-        borderRadius: 12, // Reduced from 16
-        padding: spacing.md, // Reduced from lg
+        borderRadius: radii.input,
+        padding: spacing.md,
         color: colors.textOnDark,
         ...typography.body,
         borderWidth: 1,
         borderColor: 'rgba(255,255,255,0.1)',
-        fontSize: 14, // Slightly smaller font
+        fontSize: responsiveFontSize(14),
     },
     button: {
         marginTop: spacing.lg,
@@ -280,7 +299,7 @@ const styles = StyleSheet.create({
     buttonText: {
         ...typography.labelCaps,
         color: colors.textOnDark,
-        fontSize: 16,
+        fontSize: responsiveFontSize(16),
         letterSpacing: 4,
     },
     switchButton: {
@@ -291,5 +310,14 @@ const styles = StyleSheet.create({
         ...typography.bodySmall,
         color: colors.textOnDark,
         opacity: 0.6,
+    },
+    forgotPasswordButton: {
+        alignSelf: 'flex-end',
+        marginTop: -spacing.xs,
+    },
+    forgotPasswordText: {
+        ...typography.bodySmall,
+        color: colors.cyberPink,
+        fontSize: responsiveFontSize(13),
     },
 });

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, Animated, Dimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, typography, spacing } from '../theme';
+import { horizontalScale, verticalScale, moderateScale, responsiveFontSize } from '../theme/responsive';
 
 const { width, height } = Dimensions.get('window');
 
@@ -149,11 +150,11 @@ const styles = StyleSheet.create({
     },
     bgLogo: {
         ...typography.script,
-        fontSize: 200,
+        fontSize: moderateScale(200),
         color: colors.cyberPink,
         opacity: 0.03,
         position: 'absolute',
-        top: height * 0.15,
+        top: verticalScale(120),
         zIndex: 0,
     },
     content: {
@@ -168,7 +169,7 @@ const styles = StyleSheet.create({
     logoText: {
         fontFamily: 'Allura_400Regular',
         color: colors.textOnDark,
-        fontSize: 64,
+        fontSize: responsiveFontSize(64),
         textAlign: 'center',
         textShadowColor: colors.cyberPink,
         textShadowOffset: { width: 0, height: 0 },
@@ -186,7 +187,7 @@ const styles = StyleSheet.create({
         zIndex: -1,
     },
     signatureLine: {
-        height: 3,
+        height: verticalScale(3),
         backgroundColor: colors.cyberGold,
         borderRadius: 2,
         shadowColor: colors.cyberGold,
@@ -196,8 +197,7 @@ const styles = StyleSheet.create({
     labelCaps: {
         ...typography.labelCaps,
         color: colors.textOnDark,
-        letterSpacing: 6,
-        fontSize: 11,
+        fontSize: responsiveFontSize(11),
         opacity: 0.8,
     },
     estText: {

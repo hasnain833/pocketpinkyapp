@@ -13,7 +13,9 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { Feather } from '@expo/vector-icons';
-import { colors, spacing, typography } from '../theme';
+import { colors, spacing, typography, radii } from '../theme';
+import { horizontalScale, verticalScale, moderateScale, responsiveFontSize } from '../theme/responsive';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Toast } from '../components';
 import { supabase } from '../services/supabase';
 
@@ -104,6 +106,7 @@ export function QuizScreen({ navigation, onComplete }: { navigation: any, onComp
     });
     const [currentIndex, setCurrentIndex] = useState(0);
     const [answers, setAnswers] = useState<Record<string, string>>({});
+    const insets = useSafeAreaInsets();
 
     // Animation Values
     const progressAnim = useRef(new Animated.Value(0)).current;
@@ -198,9 +201,12 @@ export function QuizScreen({ navigation, onComplete }: { navigation: any, onComp
                 style={StyleSheet.absoluteFill}
             />
 
-            <SafeAreaView style={styles.safeArea}>
+            <View style={styles.safeArea}>
                 {/* Header & Progress */}
-                <View style={styles.header}>
+                <View style={[
+                    styles.header,
+                    { paddingTop: insets.top + spacing.md }
+                ]}>
                     <View style={styles.progressTrack}>
                         <Animated.View
                             style={[
@@ -260,7 +266,7 @@ export function QuizScreen({ navigation, onComplete }: { navigation: any, onComp
                         ))}
                     </View>
                 </Animated.View>
-            </SafeAreaView>
+            </View>
         </View>
     );
 }
@@ -275,8 +281,8 @@ const styles = StyleSheet.create({
     },
     header: {
         paddingHorizontal: spacing.xl,
-        paddingTop: Platform.OS === 'ios' ? 60 : spacing.xxl + 20, // Increased top padding
-        marginBottom: spacing.xxl,
+        paddingTop: spacing.md,
+        marginBottom: spacing.lg,
     },
     progressTrack: {
         height: 6,
@@ -293,22 +299,18 @@ const styles = StyleSheet.create({
         ...typography.labelCaps,
         color: 'rgba(255,255,255,0.5)',
         textAlign: 'center',
-        fontSize: 10,
-        letterSpacing: 2,
     },
     content: {
         flex: 1,
         paddingHorizontal: spacing.xl,
-        justifyContent: 'center', // Center content vertically
-        paddingBottom: spacing.xxl * 2,
+        justifyContent: 'center',
+        paddingBottom: moderateScale(100),
     },
     questionText: {
         ...typography.display,
-        fontSize: 32,
         color: colors.textOnDark,
         textAlign: 'center',
         marginBottom: spacing.xxl,
-        lineHeight: 40,
     },
     optionsGrid: {
         flexDirection: 'row',
@@ -319,7 +321,7 @@ const styles = StyleSheet.create({
     optionCardWrapper: {
         width: '47%', // 2 columns with gap
         aspectRatio: 1,
-        borderRadius: 20,
+        borderRadius: radii.card,
         overflow: 'hidden',
         position: 'relative',
     },
@@ -338,13 +340,13 @@ const styles = StyleSheet.create({
         bottom: 0,
         borderWidth: 1,
         borderColor: 'rgba(255,255,255,0.1)',
-        borderRadius: 20,
+        borderRadius: radii.card,
         pointerEvents: 'none',
     },
     iconCircle: {
-        width: 50,
-        height: 50,
-        borderRadius: 25,
+        width: moderateScale(50),
+        height: moderateScale(50),
+        borderRadius: moderateScale(25),
         alignItems: 'center',
         justifyContent: 'center',
         marginBottom: spacing.md,
@@ -355,6 +357,5 @@ const styles = StyleSheet.create({
         ...typography.bodySemiBold,
         color: colors.textOnDark,
         textAlign: 'center',
-        fontSize: 14,
     },
 });

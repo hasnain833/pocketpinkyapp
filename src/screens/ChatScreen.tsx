@@ -13,7 +13,9 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
-import { colors, spacing, typography } from '../theme';
+import { colors, spacing, typography, radii } from '../theme';
+import { horizontalScale, verticalScale, moderateScale, responsiveFontSize } from '../theme/responsive';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PageHeader, Toast } from '../components';
 import { supabase } from '../services/supabase';
 
@@ -43,18 +45,16 @@ export function ChatScreen() {
   ]);
   const [isBotTyping, setIsBotTyping] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
-  const dotAnim = useRef(new Animated.Value(0)).current;
+  const dots = ['.', '..', '...'];
+  const [activeDot, setActiveDot] = useState(0);
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     if (!isBotTyping) return;
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(dotAnim, { toValue: 1, duration: 400, useNativeDriver: true }),
-        Animated.timing(dotAnim, { toValue: 0, duration: 400, useNativeDriver: true }),
-      ])
-    );
-    loop.start();
-    return () => loop.stop();
+    const interval = setInterval(() => {
+      setActiveDot(prev => (prev + 1) % 3);
+    }, 400);
+    return () => clearInterval(interval);
   }, [isBotTyping]);
 
   const sendMessage = () => {
@@ -116,7 +116,13 @@ export function ChatScreen() {
         <ScrollView
           ref={scrollViewRef}
           style={styles.messageList}
-          contentContainerStyle={styles.messageContent}
+          contentContainerStyle={[
+            styles.messageContent,
+            {
+              paddingTop: insets.top + moderateScale(90),
+              paddingBottom: Math.max(insets.bottom, 100),
+            }
+          ]}
           onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
@@ -142,17 +148,18 @@ export function ChatScreen() {
           ))}
           {isBotTyping && (
             <View style={[styles.messageBubble, styles.aiBubble, styles.typingBubble]}>
-              <Animated.View style={styles.typingDots}>
-                <Animated.Text style={[styles.typingDot, { opacity: dotAnim.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1] }) }]}>.</Animated.Text>
-                <Animated.Text style={[styles.typingDot, { opacity: dotAnim.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] }) }]}>.</Animated.Text>
-                <Animated.Text style={[styles.typingDot, { opacity: dotAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0.3] }) }]}>.</Animated.Text>
-              </Animated.View>
+              <View style={styles.typingDots}>
+                <Text style={styles.typingDot}>{dots[activeDot]}</Text>
+              </View>
             </View>
           )}
         </ScrollView>
 
         {/* Input – fixed at bottom */}
-        <View style={styles.inputContainer}>
+        <View style={[
+          styles.inputContainer,
+          { paddingBottom: Math.max(insets.bottom, spacing.sm) }
+        ]}>
           <LinearGradient
             colors={['rgba(255, 255, 255, 0.05)', 'rgba(255, 255, 255, 0.02)']}
             style={styles.inputRow}
@@ -198,8 +205,6 @@ const styles = StyleSheet.create({
   messageList: { flex: 1 },
   messageContent: {
     padding: spacing.xl,
-    paddingTop: 110,
-    paddingBottom: 100,
   },
   typingBubble: {
     paddingVertical: spacing.lg,
@@ -212,13 +217,13 @@ const styles = StyleSheet.create({
   },
   typingDot: {
     ...typography.body,
-    fontSize: 20,
+    fontSize: responsiveFontSize(20),
     color: colors.textOnDark,
   },
   messageBubble: {
-    maxWidth: '80%',
+    maxWidth: '85%',
     padding: spacing.lg,
-    borderRadius: 24,
+    borderRadius: radii.card,
     marginBottom: spacing.md,
   },
   aiBubble: {
@@ -235,7 +240,7 @@ const styles = StyleSheet.create({
   },
   messageText: {
     ...typography.body,
-    fontSize: 15,
+    fontSize: responsiveFontSize(15),
   },
   aiText: {
     color: colors.textOnDark,
@@ -245,7 +250,7 @@ const styles = StyleSheet.create({
   },
   timestamp: {
     ...typography.caption,
-    fontSize: 9,
+    fontSize: responsiveFontSize(9),
     color: 'rgba(255,255,255,0.3)',
     marginTop: 6,
     alignSelf: 'flex-end',
@@ -256,7 +261,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.sm,
     paddingTop: spacing.sm,
     backgroundColor: colors.deepNight,
   },
@@ -266,10 +270,10 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
     paddingLeft: spacing.lg,
     paddingRight: spacing.xs,
-    borderRadius: 30,
+    borderRadius: moderateScale(30),
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
-    minHeight: 52,
+    minHeight: verticalScale(52),
   },
   textInput: {
     flex: 1,
@@ -284,9 +288,9 @@ const styles = StyleSheet.create({
     marginLeft: spacing.sm,
   },
   sendIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: moderateScale(44),
+    height: moderateScale(44),
+    borderRadius: moderateScale(22),
     overflow: 'hidden',
   },
   sendIconInner: {

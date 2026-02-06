@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, View, Dimensions, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
-import { colors, spacing, typography } from '../theme';
+import { colors, spacing, typography, radii } from '../theme';
+import { horizontalScale, verticalScale, moderateScale, responsiveFontSize } from '../theme/responsive';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PageHeader, Toast } from '../components';
 import { Feather } from '@expo/vector-icons';
 import { supabase } from '../services/supabase';
@@ -73,6 +75,7 @@ export function ServicesScreen() {
     type: 'success',
     visible: false,
   });
+  const insets = useSafeAreaInsets();
 
   async function handleLogout() {
     const { error } = await supabase.auth.signOut();
@@ -94,7 +97,13 @@ export function ServicesScreen() {
       />
       <ScrollView
         style={styles.container}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[
+          styles.content,
+          {
+            paddingTop: insets.top + moderateScale(90),
+            paddingBottom: moderateScale(120),
+          }
+        ]}
         showsVerticalScrollIndicator={false}
       >
         {/* Editorial Header */}
@@ -225,14 +234,12 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: spacing.xl,
-    paddingTop: 100,
   },
   header: {
     marginBottom: spacing.xxl,
   },
   displayTitle: {
     ...typography.display,
-    fontSize: 42,
     color: colors.textOnDark,
     marginBottom: spacing.sm,
   },
@@ -277,9 +284,9 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   iconCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: moderateScale(56),
+    height: moderateScale(56),
+    borderRadius: moderateScale(28),
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
@@ -287,7 +294,6 @@ const styles = StyleSheet.create({
   },
   price: {
     ...typography.headline,
-    fontSize: 28,
     color: colors.textOnDark,
   },
   cardContent: {
@@ -315,8 +321,7 @@ const styles = StyleSheet.create({
   labelCaps: {
     ...typography.labelCaps,
     color: colors.accent,
-    fontSize: 9,
-    letterSpacing: 3,
+    fontSize: responsiveFontSize(9),
   },
   ctaSection: {
     marginTop: spacing.xxl,
@@ -348,7 +353,7 @@ const styles = StyleSheet.create({
   ctaButtonText: {
     ...typography.labelCaps,
     color: colors.dark,
-    fontSize: 12,
+    fontSize: responsiveFontSize(12),
   },
   bottomSpacer: {
     height: spacing.xxl * 3,
@@ -360,7 +365,6 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     ...typography.display,
-    fontSize: 32,
     color: colors.textOnDark,
     marginBottom: spacing.xl,
   },
@@ -368,7 +372,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   tierCardWrapper: {
-    borderRadius: 25,
+    borderRadius: radii.card,
     overflow: 'hidden',
   },
   tierCardGradient: {
@@ -402,7 +406,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    borderRadius: 25,
+    borderRadius: radii.card,
     borderWidth: 1.5,
     opacity: 0.2,
   },
@@ -413,17 +417,16 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   tierIconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: moderateScale(36),
+    height: moderateScale(36),
+    borderRadius: moderateScale(18),
     alignItems: 'center',
     justifyContent: 'center',
   },
   tierName: {
     ...typography.labelCaps,
     color: colors.textOnDark,
-    fontSize: 12,
-    letterSpacing: 3,
+    fontSize: responsiveFontSize(12),
   },
   tierPricing: {
     flexDirection: 'row',
@@ -432,7 +435,6 @@ const styles = StyleSheet.create({
   },
   tierPrice: {
     ...typography.headline,
-    fontSize: 32,
     color: colors.textOnDark,
   },
   tierPeriod: {

@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { StyleSheet, Text, View, Animated, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, spacing, typography } from '../theme';
+import { horizontalScale, verticalScale, moderateScale, responsiveFontSize } from '../theme/responsive';
 import { Feather } from '@expo/vector-icons';
 
 type ToastType = 'success' | 'error';
@@ -97,9 +98,9 @@ const styles = StyleSheet.create({
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    borderRadius: 24,
+    paddingVertical: verticalScale(12),
+    paddingHorizontal: horizontalScale(16),
+    borderRadius: moderateScale(24),
     gap: spacing.sm,
     maxWidth: '100%',
     ...Platform.select({
@@ -118,7 +119,7 @@ const styles = StyleSheet.create({
   },
   message: {
     ...typography.body,
-    fontSize: 14,
+    fontSize: responsiveFontSize(14),
     color: colors.textOnDark,
     flex: 1,
   },

@@ -5,67 +5,69 @@
  * Accent: Script for "Pinky" (Allura / Great Vibes)
  * Using system equivalents until custom fonts loaded.
  */
+import { responsiveFontSize } from './responsive';
+
 export const typography = {
   display: {
     fontFamily: 'PlayfairDisplay_900Black',
-    fontSize: 48,
+    fontSize: responsiveFontSize(48),
     fontWeight: '900' as const,
     letterSpacing: -1,
-    lineHeight: 52,
+    lineHeight: responsiveFontSize(52),
   },
   headline: {
     fontFamily: 'PlayfairDisplay_700Bold',
-    fontSize: 32,
+    fontSize: responsiveFontSize(32),
     fontWeight: '800' as const,
     letterSpacing: -0.5,
-    lineHeight: 38,
+    lineHeight: responsiveFontSize(38),
   },
   headlineSmall: {
     fontFamily: 'PlayfairDisplay_600SemiBold',
-    fontSize: 24,
+    fontSize: responsiveFontSize(24),
     fontWeight: '700' as const,
-    lineHeight: 30,
+    lineHeight: responsiveFontSize(30),
   },
   title: {
     fontFamily: 'Inter_600SemiBold',
-    fontSize: 20,
+    fontSize: responsiveFontSize(20),
     fontWeight: '600' as const,
-    lineHeight: 26,
+    lineHeight: responsiveFontSize(26),
   },
   body: {
     fontFamily: 'Inter_400Regular',
-    fontSize: 16,
+    fontSize: responsiveFontSize(16),
     fontWeight: '400' as const,
-    lineHeight: 24,
+    lineHeight: responsiveFontSize(24),
   },
   bodySemiBold: {
     fontFamily: 'Inter_600SemiBold',
-    fontSize: 16,
+    fontSize: responsiveFontSize(16),
     fontWeight: '600' as const,
-    lineHeight: 24,
+    lineHeight: responsiveFontSize(24),
   },
   bodySmall: {
     fontFamily: 'Inter_400Regular',
-    fontSize: 14,
+    fontSize: responsiveFontSize(14),
     fontWeight: '400' as const,
-    lineHeight: 20,
+    lineHeight: responsiveFontSize(20),
   },
   labelCaps: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 10,
+    fontSize: responsiveFontSize(10),
     fontWeight: '800' as const,
     letterSpacing: 2,
     textTransform: 'uppercase' as const,
   },
   caption: {
     fontFamily: 'Inter_400Regular',
-    fontSize: 12,
+    fontSize: responsiveFontSize(12),
     fontWeight: '500' as const,
     letterSpacing: 0.2,
   },
   script: {
     fontFamily: 'Allura_400Regular',
-    fontSize: 40,
+    fontSize: responsiveFontSize(40),
     fontWeight: '400' as const,
   },
 } as const;
