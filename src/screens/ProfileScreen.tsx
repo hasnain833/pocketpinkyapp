@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Image, TextInput, ActivityIndicator, Linking, Modal, Switch, Platform } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Image, TextInput, ActivityIndicator, Linking } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { Feather } from '@expo/vector-icons';
@@ -10,10 +12,12 @@ import { horizontalScale, verticalScale, moderateScale, responsiveFontSize } fro
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PageHeader, Toast } from '../components';
 import { supabase } from '../services/supabase';
-import { updateNotificationPreferences } from '../services/notifications';
 
+const UPGRADE_URL = process.env.EXPO_PUBLIC_UPGRADE_URL || 'https://pocket-pinky-vetting-app.vercel.app/#pricing';
 
 export function ProfileScreen() {
+  const navigation = useNavigation();
+
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -24,7 +28,7 @@ export function ProfileScreen() {
     email: '',
     avatarUrl: '',
     age: '',
-    bio: '',
+    subscriptionTier: 'free', // 'free', 'premium', 'annual'
   });
 
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error'; visible: boolean }>({
@@ -32,13 +36,7 @@ export function ProfileScreen() {
     type: 'success',
     visible: false,
   });
-  const [showNotifications, setShowNotifications] = useState(false);
-  const [notifications, setNotifications] = useState({
-    messages: true,
-    updates: true,
-    promos: false,
-    vetting: true,
-  });
+
   const insets = useSafeAreaInsets();
 
   useEffect(() => {
@@ -64,7 +62,7 @@ export function ProfileScreen() {
           email: user.email || '',
           avatarUrl: user.user_metadata?.avatar_url || '',
           age: '',
-          bio: ''
+          subscriptionTier: 'free',
         });
       } else if (data) {
         setProfile({
@@ -73,13 +71,8 @@ export function ProfileScreen() {
           email: user.email || '',
           avatarUrl: data.avatar_url || '',
           age: data.age || '',
-          bio: data.bio || ''
+          subscriptionTier: data.plan || 'free',
         });
-
-        // Load notification preferences if they exist
-        if (data.notification_preferences) {
-          setNotifications(data.notification_preferences);
-        }
       }
     } catch (error) {
       console.log('Error fetching profile:', error);
@@ -95,7 +88,6 @@ export function ProfileScreen() {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
           userId = user.id;
-          // Update local state so we don't have to fetch again
           setProfile(prev => ({ ...prev, id: user.id }));
         }
       }
@@ -106,7 +98,6 @@ export function ProfileScreen() {
         id: userId,
         full_name: profile.name,
         age: profile.age,
-        bio: profile.bio,
         avatar_url: profile.avatarUrl,
         updated_at: new Date(),
       };
@@ -114,7 +105,7 @@ export function ProfileScreen() {
       const { error } = await supabase.from('profiles').upsert(updates);
       if (error) throw error;
 
-      // Also update auth metadata for name ease of access
+      // Also update auth metadata for name
       await supabase.auth.updateUser({
         data: { full_name: profile.name, avatar_url: profile.avatarUrl }
       });
@@ -178,13 +169,12 @@ export function ProfileScreen() {
     }
   }
 
-  const openLink = (url: string) => async () => {
-    if (!url || !url.startsWith('http')) return;
+  const handleUpgrade = async () => {
     try {
-      const canOpen = await Linking.canOpenURL(url);
-      if (canOpen) await Linking.openURL(url);
-    } catch {
-      // Avoid crash on Android (e.g. IOException when no browser / invalid URL)
+      const canOpen = await Linking.canOpenURL(UPGRADE_URL);
+      if (canOpen) await Linking.openURL(UPGRADE_URL);
+    } catch (error) {
+      setToast({ message: 'Could not open upgrade page', type: 'error', visible: true });
     }
   };
 
@@ -193,8 +183,21 @@ export function ProfileScreen() {
     if (error) setToast({ message: error.message, type: 'error', visible: true });
   }
 
+  const getSubscriptionDisplay = () => {
+    switch (profile.subscriptionTier) {
+      case 'premium':
+        return { name: 'Premium', price: '$24.97/month', color: colors.cyberGold };
+      case 'annual':
+        return { name: 'Annual', price: '$247/year', color: colors.secondary };
+      default:
+        return { name: 'Free Trial', price: '3 questions included', color: colors.light };
+    }
+  };
+
+  const subscription = getSubscriptionDisplay();
+
   return (
-    <View style={{ flex: 1 }}>
+    <View style={styles.container}>
       <Toast
         visible={toast.visible}
         message={toast.message}
@@ -202,284 +205,180 @@ export function ProfileScreen() {
         onHide={() => setToast(prev => ({ ...prev, visible: false }))}
       />
       <PageHeader
-        title="Profile"
-        rightIcon="log-out"
-        onRightPress={handleLogout}
+        leftIcon="menu"
+        onLeftPress={() => (navigation as any).openDrawer()}
       />
+
       <ScrollView
-        style={styles.container}
+        style={styles.scrollView}
         contentContainerStyle={[
           styles.content,
           {
-            paddingTop: insets.top + moderateScale(90),
-            paddingBottom: moderateScale(120),
+            paddingTop: insets.top + moderateScale(80),
+            paddingBottom: insets.bottom + moderateScale(40),
           }
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Hero: Avatar, name, meta, Edit profile */}
+        {/* Hero Section */}
         <View style={styles.heroSection}>
           <TouchableOpacity
             activeOpacity={0.9}
             onPress={isEditing ? pickImage : undefined}
-            style={styles.heroAvatarWrapper}
+            style={styles.avatarContainer}
           >
             <LinearGradient
-              colors={[colors.primary, colors.secondary]}
-              style={styles.heroAvatarRing}
+              colors={[colors.gold, colors.primary]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.avatarRing}
             >
-              <View style={styles.heroAvatarInner}>
+              <View style={styles.avatarInner}>
                 {profile.avatarUrl ? (
-                  <Image source={{ uri: profile.avatarUrl }} style={styles.heroAvatar} />
+                  <Image source={{ uri: profile.avatarUrl }} style={styles.avatar} />
                 ) : (
-                  <View style={styles.heroAvatarPlaceholder}>
-                    <Text style={styles.heroAvatarInitials}>
-                      {profile.name ? profile.name.charAt(0).toUpperCase() : '?'}
+                  <View style={styles.avatarPlaceholder}>
+                    <Text style={styles.avatarInitials}>
+                      {profile.name ? profile.name.charAt(0).toUpperCase() : 'P'}
                     </Text>
                   </View>
                 )}
                 {isEditing && (
-                  <View style={styles.heroEditBadge}>
+                  <View style={styles.editBadge}>
                     {uploading ? (
                       <ActivityIndicator size="small" color="#fff" />
                     ) : (
-                      <Feather name="camera" size={14} color="#fff" />
+                      <Feather name="camera" size={12} color="#fff" />
                     )}
                   </View>
                 )}
               </View>
             </LinearGradient>
           </TouchableOpacity>
-          <Text style={styles.heroName}>{profile.name || 'Queen'}</Text>
+
+          <Text style={styles.userName}>{profile.name || 'Pink Pill User'}</Text>
+          <Text style={styles.userEmail}>{profile.email}</Text>
+
           {!isEditing && (
             <TouchableOpacity
-              style={styles.heroEditButton}
+              style={styles.editProfileButton}
               onPress={() => setIsEditing(true)}
-              activeOpacity={0.85}
+              activeOpacity={0.7}
             >
-              <Feather name="edit-2" size={14} color={colors.dark} />
-              <Text style={styles.heroEditButtonText}>Edit profile</Text>
+              <Text style={styles.editProfileText}>EDIT PROFILE</Text>
             </TouchableOpacity>
           )}
         </View>
 
-        {/* About card: view or edit form */}
-        <View style={styles.aboutSection}>
-          <View style={styles.aboutCardWrapper}>
-            <LinearGradient
-              colors={[colors.primary, colors.secondary]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.aboutCardGradient}
-            >
-              <BlurView intensity={28} tint="dark" style={styles.aboutCard}>
-                {isEditing ? (
-                  <View style={styles.aboutEditForm}>
-                    <TextInput
-                      style={styles.aboutInput}
-                      value={profile.name}
-                      onChangeText={text => setProfile({ ...profile, name: text })}
-                      placeholder="Full name"
-                      placeholderTextColor="rgba(255,255,255,0.4)"
-                    />
-                    <TextInput
-                      style={styles.aboutInput}
-                      value={profile.age}
-                      onChangeText={text => setProfile({ ...profile, age: text })}
-                      placeholder="Age"
-                      keyboardType="numeric"
-                      placeholderTextColor="rgba(255,255,255,0.4)"
-                    />
-                    <TextInput
-                      style={[styles.aboutInput, styles.aboutInputBio]}
-                      value={profile.bio}
-                      onChangeText={text => setProfile({ ...profile, bio: text })}
-                      placeholder="Short bio..."
-                      multiline
-                      numberOfLines={2}
-                      placeholderTextColor="rgba(255,255,255,0.4)"
-                    />
-                    <View style={styles.aboutActions}>
-                      <TouchableOpacity
-                        style={styles.aboutCancelButton}
-                        onPress={() => setIsEditing(false)}
-                      >
-                        <Text style={styles.aboutCancelText}>Cancel</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.aboutSaveButton}
-                        onPress={handleUpdateProfile}
-                        disabled={loading}
-                      >
-                        {loading ? (
-                          <ActivityIndicator size="small" color={colors.dark} />
-                        ) : (
-                          <>
-                            <Feather name="check" size={16} color={colors.dark} />
-                            <Text style={styles.aboutSaveText}>Save</Text>
-                          </>
-                        )}
-                      </TouchableOpacity>
-                    </View>
-                  </View>
+        {/* Edit Form */}
+        {isEditing && (
+          <View style={styles.editForm}>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Full Name</Text>
+              <TextInput
+                style={styles.input}
+                value={profile.name}
+                onChangeText={text => setProfile({ ...profile, name: text })}
+                placeholder="Enter your name"
+                placeholderTextColor={colors.textMuted}
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Age</Text>
+              <TextInput
+                style={styles.input}
+                value={profile.age}
+                onChangeText={text => setProfile({ ...profile, age: text })}
+                placeholder="Enter age"
+                keyboardType="numeric"
+                placeholderTextColor={colors.textMuted}
+              />
+            </View>
+
+            <View style={styles.editActions}>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => setIsEditing(false)}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.saveButton}
+                onPress={handleUpdateProfile}
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator size="small" color="#fff" />
                 ) : (
-                  <>
-                    <Text style={styles.aboutLabel}>ABOUT</Text>
-                    <Text style={styles.aboutText}>
-                      {profile.bio || 'No bio yet.'}
-                    </Text>
-                    {profile.age ? (
-                      <Text style={styles.aboutMeta}>{profile.age} yrs</Text>
-                    ) : null}
-                  </>
+                  <Text style={styles.saveButtonText}>Save Changes</Text>
                 )}
-              </BlurView>
-            </LinearGradient>
-          </View>
-        </View>
-
-        {/* Settings list */}
-        <View style={styles.settingsSection}>
-          <Text style={styles.settingsSectionTitle}>SETTINGS</Text>
-          <TouchableOpacity
-            style={styles.settingsRow}
-            onPress={() => setShowNotifications(true)}
-            activeOpacity={0.7}
-          >
-            <View style={styles.settingsRowLeft}>
-              <View style={styles.settingsRowIcon}>
-                <Feather name="bell" size={18} color={colors.primary} />
-              </View>
-              <Text style={styles.settingsRowLabel}>Notifications</Text>
-            </View>
-            <Feather name="chevron-right" size={20} color="rgba(255,255,255,0.4)" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.settingsRow}
-            onPress={openLink('https://example.com/terms')}
-            activeOpacity={0.7}
-          >
-            <View style={styles.settingsRowLeft}>
-              <View style={styles.settingsRowIcon}>
-                <Feather name="file-text" size={18} color={colors.primary} />
-              </View>
-              <Text style={styles.settingsRowLabel}>Terms of Service</Text>
-            </View>
-            <Feather name="chevron-right" size={20} color="rgba(255,255,255,0.4)" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.settingsRow}
-            onPress={openLink('https://example.com/privacy')}
-            activeOpacity={0.7}
-          >
-            <View style={styles.settingsRowLeft}>
-              <View style={styles.settingsRowIcon}>
-                <Feather name="shield" size={18} color={colors.primary} />
-              </View>
-              <Text style={styles.settingsRowLabel}>Privacy Policy</Text>
-            </View>
-            <Feather name="chevron-right" size={20} color="rgba(255,255,255,0.4)" />
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-
-      {/* Notification Settings Modal */}
-      <Modal
-        animationType="fade"
-        transparent={true}
-        visible={showNotifications}
-        onRequestClose={() => setShowNotifications(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <BlurView intensity={40} tint="dark" style={styles.modalContainer}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>ALERTS</Text>
-              <TouchableOpacity onPress={() => setShowNotifications(false)} style={styles.closeButton}>
-                <Feather name="x" size={24} color={colors.textOnDark} />
               </TouchableOpacity>
             </View>
+          </View>
+        )}
 
-            <View style={styles.modalBody}>
-              <View style={styles.switchRow}>
-                <View>
-                  <Text style={styles.switchLabel}>New Messages</Text>
-                  <Text style={styles.switchSub}>Get notified when you receive a reply</Text>
-                </View>
-                <Switch
-                  trackColor={{ false: '#767577', true: colors.primary }}
-                  thumbColor={notifications.messages ? colors.cyberPink : '#f4f3f4'}
-                  onValueChange={() => setNotifications(prev => ({ ...prev, messages: !prev.messages }))}
-                  value={notifications.messages}
-                />
+        {/* Subscription Card */}
+        <View style={styles.section}>
+          <Text style={styles.sectionHeader}>MEMBERSHIP</Text>
+          <View style={styles.membershipCard}>
+            <View style={styles.membershipInfo}>
+              <View>
+                <Text style={styles.membershipTier}>{subscription.name}</Text>
+                <Text style={styles.membershipStatus}>Current Plan • {subscription.price}</Text>
               </View>
+            </View>
 
-              <View style={styles.switchRow}>
-                <View>
-                  <Text style={styles.switchLabel}>App Updates</Text>
-                  <Text style={styles.switchSub}>New features and improvements</Text>
-                </View>
-                <Switch
-                  trackColor={{ false: '#767577', true: colors.primary }}
-                  thumbColor={notifications.updates ? colors.cyberPink : '#f4f3f4'}
-                  onValueChange={() => setNotifications(prev => ({ ...prev, updates: !prev.updates }))}
-                  value={notifications.updates}
-                />
-              </View>
-
-              <View style={styles.switchRow}>
-                <View>
-                  <Text style={styles.switchLabel}>Promotions</Text>
-                  <Text style={styles.switchSub}>Special offers and deals</Text>
-                </View>
-                <Switch
-                  trackColor={{ false: '#767577', true: colors.primary }}
-                  thumbColor={notifications.promos ? colors.cyberPink : '#f4f3f4'}
-                  onValueChange={() => setNotifications(prev => ({ ...prev, promos: !prev.promos }))}
-                  value={notifications.promos}
-                />
-              </View>
-
-              <View style={styles.switchRow}>
-                <View>
-                  <Text style={styles.switchLabel}>Vetting Alerts</Text>
-                  <Text style={styles.switchSub}>Instant results from background checks</Text>
-                </View>
-                <Switch
-                  trackColor={{ false: '#767577', true: colors.primary }}
-                  thumbColor={notifications.vetting ? colors.cyberPink : '#f4f3f4'}
-                  onValueChange={() => setNotifications(prev => ({ ...prev, vetting: !prev.vetting }))}
-                  value={notifications.vetting}
-                />
-              </View>
-
+            {profile.subscriptionTier === 'free' && (
               <TouchableOpacity
-                style={styles.savePreferencesButton}
-                onPress={async () => {
-                  try {
-                    await updateNotificationPreferences(profile.id, notifications);
-                    setToast({ message: 'Notification preferences saved!', type: 'success', visible: true });
-                    setShowNotifications(false);
-                  } catch (error: any) {
-                    setToast({ message: error?.message ?? 'Failed to save preferences', type: 'error', visible: true });
-                  }
-                }}
+                style={styles.upgradeBtn}
+                onPress={handleUpgrade}
+                activeOpacity={0.8}
               >
                 <LinearGradient
                   colors={colors.gradients.vibrant}
                   start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.savePreferencesGradient}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.upgradeBtnGradient}
                 >
-                  <Feather name="check" size={16} color={colors.textOnDark} />
-                  <Text style={styles.savePreferencesText}>SAVE PREFERENCES</Text>
+                  <Text style={styles.upgradeBtnText}>UPGRADE TO PREMIUM</Text>
                 </LinearGradient>
               </TouchableOpacity>
-            </View>
-          </BlurView>
+            )}
+          </View>
         </View>
-      </Modal>
 
+        {/* Support Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionHeader}>SUPPORT & LEGAL</Text>
+          <View style={styles.settingsGroup}>
+            {[
+              { label: 'Terms of Service', icon: 'file-text', url: 'https://pocket-pinky-vetting-app.vercel.app' },
+              { label: 'Privacy Policy', icon: 'lock', url: 'https://pocket-pinky-vetting-app.vercel.app' },
+              { label: 'Help & Support', icon: 'help-circle', url: 'https://pocket-pinky-vetting-app.vercel.app' },
+            ].map((item, idx) => (
+              <TouchableOpacity
+                key={idx}
+                style={[styles.settingsItem, idx === 2 && { borderBottomWidth: 0 }]}
+                onPress={() => Linking.openURL(item.url)}
+              >
+                <View style={styles.settingsItemLeft}>
+                  <View style={styles.settingsIcon}>
+                    <Feather name={item.icon as any} size={18} color={colors.gold} />
+                  </View>
+                  <Text style={styles.settingsLabel}>{item.label}</Text>
+                </View>
+                <Feather name="chevron-right" size={18} color={colors.textMuted} />
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
 
+        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+          <Feather name="log-out" size={18} color={colors.pinkDeep} />
+          <Text style={styles.logoutBtnText}>Log Out</Text>
+        </TouchableOpacity>
+      </ScrollView>
     </View>
   );
 }
@@ -487,320 +386,273 @@ export function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.dark,
+    backgroundColor: colors.cream,
+  },
+  scrollView: {
+    flex: 1,
   },
   content: {
-    paddingHorizontal: spacing.md,
-    flexGrow: 1,
+    paddingHorizontal: spacing.xl,
   },
 
-  // Hero
+  // Hero Section
   heroSection: {
     alignItems: 'center',
-    paddingVertical: spacing.xl,
-    marginBottom: spacing.lg,
+    marginBottom: spacing.xxl,
   },
-  heroAvatarWrapper: {
+  avatarContainer: {
     marginBottom: spacing.md,
   },
-  heroAvatarRing: {
-    width: moderateScale(116),
-    height: moderateScale(116),
-    borderRadius: moderateScale(58),
+  avatarRing: {
+    width: moderateScale(110),
+    height: moderateScale(110),
+    borderRadius: moderateScale(55),
     padding: 3,
     alignItems: 'center',
     justifyContent: 'center',
+    elevation: 4,
+    shadowColor: colors.gold,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
   },
-  heroAvatarInner: {
-    width: moderateScale(106),
-    height: moderateScale(106),
-    borderRadius: moderateScale(53),
+  avatarInner: {
+    width: moderateScale(100),
+    height: moderateScale(100),
+    borderRadius: moderateScale(50),
+    backgroundColor: colors.card,
     overflow: 'hidden',
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    position: 'relative',
-  },
-  heroAvatar: {
-    width: moderateScale(106),
-    height: moderateScale(106),
-    borderRadius: moderateScale(53),
-  },
-  heroAvatarPlaceholder: {
-    width: moderateScale(106),
-    height: moderateScale(106),
-    borderRadius: moderateScale(53),
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.08)',
   },
-  heroAvatarInitials: {
-    ...typography.headline,
-    color: 'rgba(255,255,255,0.9)',
-    fontSize: 36,
+  avatar: {
+    width: '100%',
+    height: '100%',
   },
-  heroEditBadge: {
+  avatarPlaceholder: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: colors.blush,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarInitials: {
+    fontFamily: 'PlayfairDisplay_700Bold',
+    fontSize: moderateScale(36),
+    color: colors.primary,
+  },
+  editBadge: {
     position: 'absolute',
-    bottom: verticalScale(6),
-    right: horizontalScale(6),
-    backgroundColor: colors.primary,
-    width: moderateScale(28),
-    height: moderateScale(28),
-    borderRadius: moderateScale(14),
+    bottom: 2,
+    right: 2,
+    backgroundColor: colors.gold,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: colors.dark,
+    borderColor: '#fff',
   },
-  heroName: {
-    ...typography.display,
-    color: colors.textOnDark,
+  userName: {
+    fontFamily: 'PlayfairDisplay_700Bold',
+    fontSize: responsiveFontSize(28),
+    color: colors.textPrimary,
     marginBottom: 4,
-    textAlign: 'center',
   },
-  heroMeta: {
+  userEmail: {
     ...typography.bodySmall,
-    color: 'rgba(255,255,255,0.6)',
-    fontSize: 13,
+    color: colors.textMuted,
     marginBottom: spacing.md,
-    textAlign: 'center',
   },
-  heroEditButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: colors.primary,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 24,
+  editProfileButton: {
+    borderWidth: 1,
+    borderColor: colors.gold,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
   },
-  heroEditButtonText: {
+  editProfileText: {
     ...typography.labelCaps,
-    fontSize: 12,
-    color: colors.dark,
-    letterSpacing: 1,
+    fontSize: 10,
+    color: colors.gold,
+    letterSpacing: 1.5,
   },
 
-  // About card
-  aboutSection: {
-    marginBottom: spacing.xl,
-    paddingHorizontal: spacing.xs,
-  },
-  aboutCardWrapper: {
+  // Forms
+  editForm: {
+    backgroundColor: colors.card,
     borderRadius: 24,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.2,
-    shadowRadius: 16,
-  },
-  aboutCardGradient: {
-    borderRadius: 24,
-    padding: 1,
-  },
-  aboutCard: {
     padding: spacing.lg,
-    borderRadius: 23,
-    backgroundColor: 'rgba(10, 5, 20, 0.65)',
-    minHeight: 100,
-  },
-  aboutLabel: {
-    ...typography.labelCaps,
-    color: 'rgba(255,255,255,0.5)',
-    marginBottom: spacing.sm,
-  },
-  aboutText: {
-    ...typography.body,
-    color: colors.textOnDark,
-    lineHeight: responsiveFontSize(24),
-  },
-  aboutMeta: {
-    ...typography.bodySmall,
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.5)',
-  },
-  aboutEditForm: {
-    gap: spacing.sm,
-  },
-  aboutInput: {
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    borderRadius: radii.input,
-    paddingVertical: verticalScale(10),
-    paddingHorizontal: horizontalScale(14),
-    color: colors.textOnDark,
-    ...typography.bodySmall,
+    marginBottom: spacing.xl,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-    fontSize: responsiveFontSize(14),
+    borderColor: colors.border,
   },
-  aboutInputBio: {
-    minHeight: 56,
-    textAlignVertical: 'top',
+  inputGroup: {
+    marginBottom: spacing.md,
   },
-  aboutActions: {
+  inputLabel: {
+    ...typography.labelCaps,
+    fontSize: 10,
+    color: colors.textMuted,
+    marginBottom: 6,
+    marginLeft: 4,
+  },
+  input: {
+    backgroundColor: colors.cream,
+    borderRadius: 12,
+    paddingVertical: verticalScale(12),
+    paddingHorizontal: horizontalScale(16),
+    color: colors.textPrimary,
+    fontFamily: 'Inter_400Regular',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  editActions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
     gap: spacing.sm,
     marginTop: spacing.md,
   },
-  aboutCancelButton: {
+  cancelButton: {
     paddingVertical: 10,
     paddingHorizontal: 16,
   },
-  aboutCancelText: {
+  cancelButtonText: {
     ...typography.body,
+    color: colors.textSecondary,
     fontSize: 14,
-    color: 'rgba(255,255,255,0.6)',
   },
-  aboutSaveButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+  saveButton: {
     backgroundColor: colors.primary,
     paddingVertical: 10,
     paddingHorizontal: 20,
     borderRadius: 20,
+    minWidth: 100,
+    alignItems: 'center',
   },
-  aboutSaveText: {
+  saveButtonText: {
     ...typography.labelCaps,
     fontSize: 12,
-    color: colors.dark,
-    letterSpacing: 0.5,
+    color: '#fff',
   },
 
-  // Settings list
-  settingsSection: {
+  // Sections
+  section: {
     marginBottom: spacing.xl,
   },
-  settingsSectionTitle: {
+  sectionHeader: {
     ...typography.labelCaps,
     fontSize: 11,
-    color: 'rgba(255,255,255,0.4)',
-    letterSpacing: 1.5,
-    marginBottom: spacing.sm,
-    paddingHorizontal: spacing.xs,
+    color: colors.textMuted,
+    letterSpacing: 2,
+    marginBottom: spacing.md,
+    marginLeft: 4,
   },
-  settingsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.06)',
+
+  // Membership Card
+  membershipCard: {
+    backgroundColor: colors.card,
+    borderRadius: 24,
+    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    elevation: 2,
   },
-  settingsRowLeft: {
+  membershipInfo: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
+    marginBottom: spacing.lg,
   },
-  settingsRowIcon: {
-    width: moderateScale(36),
-    height: moderateScale(36),
-    borderRadius: moderateScale(18),
-    backgroundColor: 'rgba(255,20,147,0.15)',
+  tierIcon: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  settingsRowLabel: {
-    ...typography.body,
-    color: colors.textOnDark,
+  membershipTier: {
+    fontFamily: 'PlayfairDisplay_700Bold',
+    fontSize: 18,
+    color: colors.textPrimary,
   },
-
-  // Footer
-  footer: {
-    paddingVertical: spacing.xl,
-    alignItems: 'center',
-    width: '100%',
-  },
-  footerTagline: {
+  membershipStatus: {
     ...typography.bodySmall,
-    color: colors.textOnDark,
-    opacity: 0.5,
-    textAlign: 'center',
-    marginBottom: spacing.xs,
+    color: colors.textMuted,
   },
-  footerLogo: {
-    ...typography.script,
-    fontSize: 40,
-    color: colors.primary,
-  },
-  bottomSpacer: {
-    height: 120,
-  },
-
-  // Modal Styles
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.5)',
-  },
-  modalContainer: {
-    width: '90%',
-    backgroundColor: colors.dark,
-    borderRadius: 30,
-    padding: spacing.xl,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+  upgradeBtn: {
     overflow: 'hidden',
+    borderRadius: 16,
   },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.xl,
-  },
-  modalTitle: {
-    ...typography.headlineSmall,
-    color: colors.textOnDark,
-    fontSize: 20,
-  },
-  closeButton: {
-    padding: spacing.xs,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 20,
-  },
-  modalBody: {
-    gap: spacing.lg,
-  },
-  switchRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingBottom: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.05)',
-  },
-  switchLabel: {
-    ...typography.body, // Fixed from label
-    color: colors.textOnDark,
-    fontSize: 16,
-    marginBottom: 4,
-  },
-  switchSub: {
-    ...typography.bodySmall,
-    color: colors.textOnDark,
-    opacity: 0.5,
-    fontSize: 12,
-  },
-  savePreferencesButton: {
-    marginTop: spacing.lg,
-    shadowColor: colors.cyberPink,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  savePreferencesGradient: {
+  upgradeBtnGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.sm,
-    padding: spacing.lg,
-    borderRadius: 20,
+    gap: 8,
+    paddingVertical: 14,
   },
-  savePreferencesText: {
+  upgradeBtnText: {
     ...typography.labelCaps,
-    color: colors.textOnDark,
+    color: '#fff',
+    fontSize: 12,
+    letterSpacing: 1,
+  },
+
+  // Settings Group
+  settingsGroup: {
+    backgroundColor: colors.card,
+    borderRadius: 24,
+    padding: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  settingsItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  settingsItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  settingsIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.goldPale,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  settingsLabel: {
+    ...typography.body,
+    fontSize: 15,
+    color: colors.textPrimary,
+  },
+
+  // Sign Out
+  logoutBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 20,
+    marginTop: spacing.md,
+  },
+  logoutBtnText: {
+    ...typography.labelCaps,
+    color: colors.pinkDeep,
     fontSize: 13,
-    letterSpacing: 2,
+    letterSpacing: 1,
   },
 });
+

@@ -1,301 +1,535 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet,
-  Text,
   View,
-  ScrollView,
+  Text,
+  FlatList,
   TextInput,
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
-  Dimensions,
-  Animated,
+  ActivityIndicator,
+  Keyboard,
+  Animated
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Feather } from '@expo/vector-icons';
-import { colors, spacing, typography, radii } from '../theme';
-import { horizontalScale, verticalScale, moderateScale, responsiveFontSize } from '../theme/responsive';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Feather } from '@expo/vector-icons';
 import { PageHeader, Toast } from '../components';
 import { supabase } from '../services/supabase';
+import { botpress, Message } from '../services/botpress';
+import { colors, spacing, typography } from '../theme';
+import { moderateScale, responsiveFontSize } from '../theme/responsive';
 
-const { width } = Dimensions.get('window');
+const HEADER_HEIGHT = moderateScale(80);
 
-interface Message {
-  id: string;
-  text: string;
-  sender: 'user' | 'ai';
-  timestamp: Date;
-}
+// Custom Three Dots Animation
+const TypingDots = () => {
+  const [dots] = useState([new Animated.Value(0), new Animated.Value(0), new Animated.Value(0)]);
 
-export function ChatScreen() {
+  useEffect(() => {
+    const animations = dots.map((dot, i) => {
+      return Animated.loop(
+        Animated.sequence([
+          Animated.delay(i * 150),
+          Animated.timing(dot, { toValue: 1, duration: 400, useNativeDriver: true }),
+          Animated.timing(dot, { toValue: 0, duration: 400, useNativeDriver: true }),
+        ])
+      );
+    });
+    Animated.parallel(animations).start();
+  }, []);
+
+  return (
+    <View style={styles.dotsContainer}>
+      {dots.map((dot, i) => (
+        <Animated.View
+          key={i}
+          style={[
+            styles.dot,
+            {
+              opacity: dot.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1] }),
+              transform: [{ translateY: dot.interpolate({ inputRange: [0, 1], outputRange: [0, -4] }) }],
+            },
+          ]}
+        />
+      ))}
+    </View>
+  );
+};
+
+export function ChatScreen({ navigation, route }: any) {
+  const insets = useSafeAreaInsets();
+  const flatListRef = useRef<FlatList>(null);
+
+  const [user, setUser] = useState<any>(null);
+  const [botpressUserId, setBotpressUserId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<any[]>([]);
+  const [inputText, setInputText] = useState('');
+  const [isBotTyping, setIsBotTyping] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // New Chat State
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
+
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error'; visible: boolean }>({
     message: '',
     type: 'success',
     visible: false,
   });
-  const [inputText, setInputText] = useState('');
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: '1',
-      text: "Hey sis. I'm Pinky. Ready to vet some dates and decode some BS?",
-      sender: 'ai',
-      timestamp: new Date(),
-    },
-  ]);
-  const [isBotTyping, setIsBotTyping] = useState(false);
-  const scrollViewRef = useRef<ScrollView>(null);
-  const dots = ['.', '..', '...'];
-  const [activeDot, setActiveDot] = useState(0);
-  const insets = useSafeAreaInsets();
+
+  // Watch for conversationId changes from navigation (Sidebar)
+  useEffect(() => {
+    const convoId = route.params?.conversationId;
+    if (convoId) {
+      botpress.setConversationId(convoId);
+      refreshMessages();
+    } else if (!isInitialLoad) {
+      // If we are already loaded and params are cleared (New Chat from Sidebar)
+      startNewChat();
+    }
+  }, [route.params?.conversationId]);
 
   useEffect(() => {
-    if (!isBotTyping) return;
-    const interval = setInterval(() => {
-      setActiveDot(prev => (prev + 1) % 3);
-    }, 400);
-    return () => clearInterval(interval);
-  }, [isBotTyping]);
+    initChat();
+  }, []);
 
-  const sendMessage = () => {
-    if (!inputText.trim()) return;
-
-    const userMsg: Message = {
-      id: Date.now().toString(),
-      text: inputText.trim(),
-      sender: 'user',
-      timestamp: new Date(),
-    };
-
-    setMessages(prev => [...prev, userMsg]);
-    setInputText('');
-    setIsBotTyping(true);
-
-    // Simulate AI response (replace with Botpress later)
-    setTimeout(() => {
-      setIsBotTyping(false);
-      const aiMsg: Message = {
-        id: (Date.now() + 1).toString(),
-        text: "I'm looking into that for you. Give me a sec to analyze the vibe...",
-        sender: 'ai',
-        timestamp: new Date(),
-      };
-      setMessages(prev => [...prev, aiMsg]);
-    }, 1000);
+  const refreshMessages = async () => {
+    setIsLoading(true);
+    await fetchMessages();
+    setIsLoading(false);
   };
 
-  async function handleLogout() {
-    const { error } = await supabase.auth.signOut();
-    if (error) setToast({ message: error.message, type: 'error', visible: true });
+  const startNewChat = async () => {
+    setIsLoading(true);
+    setMessages([]);
+    await botpress.createConversation();
+    setIsLoading(false);
+  };
+
+  async function initChat() {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      setUser(session.user);
+
+      const bpUser = await botpress.createUser(session.user.id, {
+        email: session.user.email,
+        name: session.user.user_metadata?.full_name || 'Queen'
+      });
+
+      const internalId = bpUser?.botpressUserId || bpUser?.user?.id || bpUser?.id;
+      setBotpressUserId(internalId);
+      const convoId = route.params?.conversationId;
+      if (convoId) {
+        botpress.setConversationId(convoId);
+      } else {
+        await botpress.getOrStartLastConversation();
+      }
+
+      await fetchMessages();
+      setIsInitialLoad(false);
+    } catch (error: any) {
+      console.error('Chat Init Error:', error);
+      setToast({ message: 'Failed to connect to chat', type: 'error', visible: true });
+    } finally {
+      setIsLoading(false);
+    }
   }
+
+  const fetchMessages = async () => {
+    try {
+      const response = await botpress.listMessages();
+      const currentInternalId = botpress.getInternalUserId();
+      if (currentInternalId && currentInternalId !== botpressUserId) {
+        setBotpressUserId(currentInternalId);
+      }
+
+      if (response && response.messages) {
+        const filtered = response.messages.filter((m: any) => {
+          if (!m.payload) return false;
+          return m.payload.text || m.payload.type === 'choice' || m.payload.type === 'text';
+        });
+
+        const sorted = filtered.reverse();
+        setMessages(sorted);
+      }
+    } catch (error) {
+      console.error('[Chat] Fetch Messages Error:', error);
+    }
+  };
+
+  const startPolling = () => {
+    let attempts = 0;
+    const maxAttempts = 15;
+    const interval = setInterval(async () => {
+      attempts++;
+      const response = await botpress.listMessages();
+      if (response && response.messages) {
+        const sorted = response.messages.reverse();
+        setMessages(sorted);
+
+        const lastMsg = sorted[sorted.length - 1];
+        const isBotMessage = lastMsg && lastMsg.direction === 'incoming';
+
+        if (isBotMessage) {
+          clearInterval(interval);
+          setIsBotTyping(false);
+        }
+      }
+
+      if (attempts >= maxAttempts) {
+        clearInterval(interval);
+        setIsBotTyping(false);
+      }
+    }, 1500);
+  };
+
+  const handleSend = async () => {
+    if (!inputText.trim()) return;
+
+    const userMessageText = inputText.trim();
+    setInputText('');
+
+    const tempMsg: any = {
+      id: `temp-${Date.now()}`,
+      payload: { type: 'text', text: userMessageText },
+      userId: botpressUserId,
+      direction: 'outgoing',
+      createdAt: new Date().toISOString(),
+    };
+
+    setMessages(prev => [...prev, tempMsg]);
+    setIsBotTyping(true);
+
+    try {
+      await botpress.sendMessage(userMessageText);
+      startPolling();
+    } catch (error: any) {
+      console.error('[Chat] Send Error:', error.response?.data || error.message);
+      setToast({ message: 'Message failed to send', type: 'error', visible: true });
+      setIsBotTyping(false);
+    }
+  };
+
+  const handleChoiceSelect = async (label: string) => {
+    const tempMsg: any = {
+      id: `temp-${Date.now()}`,
+      payload: { type: 'text', text: label },
+      userId: botpressUserId,
+      direction: 'outgoing',
+      createdAt: new Date().toISOString(),
+    };
+
+    setMessages(prev => [...prev, tempMsg]);
+    setIsBotTyping(true);
+
+    try {
+      await botpress.sendMessage(label);
+      startPolling();
+    } catch (error) {
+      setToast({ message: 'Failed to send choice', type: 'error', visible: true });
+      setIsBotTyping(false);
+    }
+  };
+
+  const renderMessage = ({ item }: { item: any }) => {
+    const isUser = item.direction === 'outgoing' || (item.userId && item.userId === botpressUserId);
+    const isChoice = item.payload?.type === 'choice';
+
+    return (
+      <View style={[
+        styles.messageRow,
+        isUser ? styles.userRow : styles.botRow
+      ]}>
+        <View style={isUser ? styles.userRowContent : styles.botRowContent}>
+          <View style={[
+            styles.messageBubble,
+            isUser ? styles.userBubble : styles.botBubble
+          ]}>
+            <Text style={[
+              styles.messageText,
+              isUser ? styles.userText : styles.botText
+            ]}>
+              {item.payload?.text || ''}
+            </Text>
+          </View>
+
+          {isChoice && item.payload?.options && !isUser && (
+            <View style={styles.choicesContainer}>
+              {item.payload.options.map((option: any, idx: number) => (
+                <TouchableOpacity
+                  key={idx}
+                  style={styles.choiceButton}
+                  onPress={() => handleChoiceSelect(option.label)}
+                >
+                  <Text style={styles.choiceText}>{option.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+        </View>
+      </View>
+    );
+  };
+
+  const renderWelcome = () => (
+    <View style={styles.welcomeContainer}>
+      <Text style={styles.welcomeTitle}>Welcome, {user?.user_metadata?.full_name?.split(' ')[0] || 'Queen'} ✨</Text>
+      <Text style={styles.welcomeText}>How can I assist you today?</Text>
+    </View>
+  );
 
   return (
     <View style={styles.container}>
+      <PageHeader
+        title="Pink Pill Chat"
+        leftIcon="menu"
+        onLeftPress={() => navigation.openDrawer()}
+      />
+
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.keyboardView}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 25}
+      >
+        <View style={styles.flatListWrapper}>
+          {isLoading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={colors.primary} />
+              <Text style={styles.loadingText}>Loading...</Text>
+            </View>
+          ) : (
+            <FlatList
+              ref={flatListRef}
+              data={messages}
+              renderItem={renderMessage}
+              keyExtractor={item => item.id}
+              contentContainerStyle={[
+                styles.messagesList,
+                { paddingTop: HEADER_HEIGHT + spacing.md, flexGrow: 1 }
+              ]}
+              ListEmptyComponent={renderWelcome}
+              ListFooterComponent={() => (
+                isBotTyping ? (
+                  <View style={styles.typingWrapper}>
+                    <TypingDots />
+                  </View>
+                ) : <View style={{ height: spacing.lg }} />
+              )}
+              onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+              onLayout={() => flatListRef.current?.scrollToEnd({ animated: true })}
+            />
+          )}
+        </View>
+
+        <View style={styles.inputContainer}>
+          <View style={styles.inputWrapper}>
+            <TextInput
+              style={styles.input}
+              placeholder="Ask me anything..."
+              placeholderTextColor={colors.textMuted}
+              value={inputText}
+              onChangeText={setInputText}
+              multiline
+              maxLength={1000}
+            />
+            <TouchableOpacity
+              style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]}
+              onPress={handleSend}
+              disabled={!inputText.trim()}
+            >
+              <Feather name="arrow-up" size={20} color="#fff" />
+            </TouchableOpacity>
+          </View>
+          <View style={{ height: insets.bottom || spacing.sm }} />
+        </View>
+      </KeyboardAvoidingView>
+
       <Toast
         visible={toast.visible}
         message={toast.message}
         type={toast.type}
         onHide={() => setToast(prev => ({ ...prev, visible: false }))}
       />
-
-      {/* Header – fixed at top */}
-      <View style={styles.headerSticky}>
-        <PageHeader
-          title="Pinky AI"
-          rightIcon="log-out"
-          onRightPress={handleLogout}
-        />
-      </View>
-
-      {/* Only this area scrolls */}
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardView}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-      >
-        <ScrollView
-          ref={scrollViewRef}
-          style={styles.messageList}
-          contentContainerStyle={[
-            styles.messageContent,
-            {
-              paddingTop: insets.top + moderateScale(90),
-              paddingBottom: Math.max(insets.bottom, 100),
-            }
-          ]}
-          onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
-          {messages.map(msg => (
-            <View
-              key={msg.id}
-              style={[
-                styles.messageBubble,
-                msg.sender === 'user' ? styles.userBubble : styles.aiBubble
-              ]}
-            >
-              <Text style={[
-                styles.messageText,
-                msg.sender === 'user' ? styles.userText : styles.aiText
-              ]}>
-                {msg.text}
-              </Text>
-              <Text style={styles.timestamp}>
-                {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </Text>
-            </View>
-          ))}
-          {isBotTyping && (
-            <View style={[styles.messageBubble, styles.aiBubble, styles.typingBubble]}>
-              <View style={styles.typingDots}>
-                <Text style={styles.typingDot}>{dots[activeDot]}</Text>
-              </View>
-            </View>
-          )}
-        </ScrollView>
-
-        {/* Input – fixed at bottom */}
-        <View style={[
-          styles.inputContainer,
-          { paddingBottom: Math.max(insets.bottom, spacing.sm) }
-        ]}>
-          <LinearGradient
-            colors={['rgba(255, 255, 255, 0.05)', 'rgba(255, 255, 255, 0.02)']}
-            style={styles.inputRow}
-          >
-            <TextInput
-              style={styles.textInput}
-              placeholder="Tell me what happened..."
-              placeholderTextColor="rgba(255,255,255,0.4)"
-              value={inputText}
-              onChangeText={setInputText}
-              multiline
-            />
-            <TouchableOpacity
-              onPress={sendMessage}
-              activeOpacity={0.8}
-              style={styles.sendButton}
-            >
-              <LinearGradient
-                colors={colors.gradients.vibrant}
-                style={styles.sendIcon}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-              >
-                <View style={styles.sendIconInner}>
-                  <Feather name="send" size={20} color={colors.dark} />
-                </View>
-              </LinearGradient>
-            </TouchableOpacity>
-          </LinearGradient>
-        </View>
-      </KeyboardAvoidingView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.deepNight },
-  headerSticky: {
-    zIndex: 10,
-    backgroundColor: colors.deepNight,
+  container: {
+    flex: 1,
+    backgroundColor: colors.cream,
   },
-  keyboardView: { flex: 1 },
-  messageList: { flex: 1 },
-  messageContent: {
-    padding: spacing.xl,
+  keyboardView: {
+    flex: 1,
   },
-  typingBubble: {
-    paddingVertical: spacing.lg,
-    paddingHorizontal: spacing.xl,
+  flatListWrapper: {
+    flex: 1,
   },
-  typingDots: {
+  messagesList: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.md,
+  },
+  messageRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
+    marginBottom: spacing.md,
+    width: '100%',
   },
-  typingDot: {
-    ...typography.body,
-    fontSize: responsiveFontSize(20),
-    color: colors.textOnDark,
+  userRow: {
+    justifyContent: 'flex-end',
+  },
+  botRow: {
+    justifyContent: 'flex-start',
+  },
+  userRowContent: {
+    alignItems: 'flex-end',
+    width: '100%',
+  },
+  botRowContent: {
+    alignItems: 'flex-start',
+    width: '100%',
   },
   messageBubble: {
     maxWidth: '85%',
-    padding: spacing.lg,
-    borderRadius: radii.card,
-    marginBottom: spacing.md,
-  },
-  aiBubble: {
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    borderTopLeftRadius: 4,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.05)',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: 20,
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
   },
   userBubble: {
-    alignSelf: 'flex-end',
     backgroundColor: colors.primary,
-    borderTopRightRadius: 4,
+    borderBottomRightRadius: 4,
+  },
+  botBubble: {
+    backgroundColor: colors.card,
+    borderBottomLeftRadius: 4,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   messageText: {
-    ...typography.body,
-    fontSize: responsiveFontSize(15),
-  },
-  aiText: {
-    color: colors.textOnDark,
+    fontSize: responsiveFontSize(14),
+    lineHeight: 20,
+    fontFamily: 'Inter_400Regular',
   },
   userText: {
-    color: colors.textOnDark,
+    color: '#fff',
   },
-  timestamp: {
-    ...typography.caption,
-    fontSize: responsiveFontSize(9),
-    color: 'rgba(255,255,255,0.3)',
-    marginTop: 6,
-    alignSelf: 'flex-end',
+  botText: {
+    color: colors.textPrimary,
+  },
+  choicesContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: spacing.sm,
+    gap: spacing.sm,
+  },
+  choiceButton: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: colors.primary,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: 16,
+  },
+  choiceText: {
+    ...typography.bodySmall,
+    color: colors.primary,
+    fontFamily: 'Inter_600SemiBold',
   },
   inputContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.sm,
-    backgroundColor: colors.deepNight,
+    paddingHorizontal: spacing.lg,
+    backgroundColor: colors.cream,
   },
-  inputRow: {
+  inputWrapper: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
+    backgroundColor: '#fff',
+    borderRadius: 28,
+    paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
-    paddingLeft: spacing.lg,
-    paddingRight: spacing.xs,
-    borderRadius: moderateScale(30),
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    minHeight: verticalScale(52),
+    borderColor: colors.border,
+    minHeight: 52,
   },
-  textInput: {
+  input: {
     flex: 1,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.sm,
-    color: colors.textOnDark,
-    ...typography.body,
-    maxHeight: 100,
+    maxHeight: 120,
+    paddingTop: 12,
+    paddingBottom: 12,
+    paddingHorizontal: 8,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 16,
+    color: colors.textPrimary,
   },
   sendButton: {
-    alignSelf: 'center',
-    marginLeft: spacing.sm,
-  },
-  sendIcon: {
-    width: moderateScale(44),
-    height: moderateScale(44),
-    borderRadius: moderateScale(22),
-    overflow: 'hidden',
-  },
-  sendIconInner: {
-    ...StyleSheet.absoluteFillObject,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 6,
+    marginLeft: 4,
+  },
+  sendButtonDisabled: {
+    backgroundColor: colors.textMuted,
+    opacity: 0.5,
+  },
+  typingWrapper: {
+    paddingVertical: spacing.sm,
+    alignSelf: 'flex-start',
+  },
+  dotsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.card,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    elevation: 1,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.gold,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    ...typography.caption,
+    marginTop: spacing.sm,
+    color: colors.textMuted,
+  },
+  welcomeContainer: {
+    flex: 1,
+    paddingHorizontal: spacing.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingBottom: HEADER_HEIGHT, // Offset padding to better visually center
+  },
+  welcomeTitle: {
+    ...typography.display,
+    fontSize: responsiveFontSize(28),
+    color: colors.primary,
+    marginBottom: spacing.md,
+    textAlign: 'center',
+  },
+  welcomeText: {
+    ...typography.body,
+    color: colors.textMuted,
+    textAlign: 'center',
+    lineHeight: 24,
   },
 });

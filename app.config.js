@@ -5,6 +5,7 @@ const expoConfig = appJson.expo;
 
 module.exports = {
   ...expoConfig,
+  owner: 'hasnain833',
   extra: {
     ...expoConfig.extra,
     supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL,

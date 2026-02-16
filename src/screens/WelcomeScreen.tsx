@@ -12,7 +12,7 @@ interface WelcomeScreenProps {
 
 export function WelcomeScreen({ onFinish }: WelcomeScreenProps) {
     const [displayedText, setDisplayedText] = useState('');
-    const fullText = 'Pinky Pocket';
+    const fullText = 'Pink Pill ';
     const fadeAnim = useState(new Animated.Value(0))[0];
     const scaleAnim = useState(new Animated.Value(0.95))[0];
     const underlineAnim = useState(new Animated.Value(0))[0];
@@ -88,11 +88,8 @@ export function WelcomeScreen({ onFinish }: WelcomeScreenProps) {
 
     return (
         <View style={styles.container}>
-            <LinearGradient
-                colors={[colors.deepNight, colors.dark]}
-                style={styles.gradient}
-            >
-                <Text style={styles.bgLogo}>Pinky</Text>
+            <View style={styles.contentWrapper}>
+                <Text style={styles.bgLogo}>Pink Pill</Text>
 
                 <Animated.View style={[
                     styles.content,
@@ -105,7 +102,6 @@ export function WelcomeScreen({ onFinish }: WelcomeScreenProps) {
                         <Text style={styles.logoText}>
                             {displayedText}
                         </Text>
-                        <View style={styles.glowOverlay} />
                     </View>
 
                     <Animated.View
@@ -120,7 +116,7 @@ export function WelcomeScreen({ onFinish }: WelcomeScreenProps) {
                         ]}
                     />
 
-                    <Animated.View style={{ opacity: subFadeAnim, marginTop: spacing.lg, alignItems: 'center' }}>
+                    <Animated.View style={{ opacity: subFadeAnim, marginTop: spacing.xl, alignItems: 'center' }}>
                         <Text style={styles.labelCaps}>YOUR AI BIG SISTER</Text>
                     </Animated.View>
                 </Animated.View>
@@ -128,33 +124,36 @@ export function WelcomeScreen({ onFinish }: WelcomeScreenProps) {
                 <View style={styles.loaderContainer}>
                     <View style={styles.loaderTrack}>
                         <LinearGradient
-                            colors={[colors.cyberGold, colors.cyberPink]}
+                            colors={colors.gradients.vibrant}
                             start={{ x: 0, y: 0 }}
                             end={{ x: 1, y: 0 }}
                             style={styles.loaderFill}
                         />
                     </View>
                 </View>
-            </LinearGradient>
+            </View>
         </View>
     );
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1 },
-    gradient: {
+    container: {
+        flex: 1,
+        backgroundColor: colors.cream,
+    },
+    contentWrapper: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
         padding: spacing.xl,
     },
     bgLogo: {
-        ...typography.script,
-        fontSize: moderateScale(200),
-        color: colors.cyberPink,
+        fontFamily: 'PlayfairDisplay_700Bold',
+        fontSize: moderateScale(130),
+        color: colors.primary,
         opacity: 0.03,
         position: 'absolute',
-        top: verticalScale(120),
+        top: height * 0.15,
         zIndex: 0,
     },
     content: {
@@ -168,61 +167,43 @@ const styles = StyleSheet.create({
     },
     logoText: {
         fontFamily: 'Allura_400Regular',
-        color: colors.textOnDark,
-        fontSize: responsiveFontSize(64),
+        color: colors.textPrimary,
+        fontSize: responsiveFontSize(72),
         textAlign: 'center',
-        textShadowColor: colors.cyberPink,
-        textShadowOffset: { width: 0, height: 0 },
-        textShadowRadius: 15,
-    },
-    glowOverlay: {
-        position: 'absolute',
-        top: -20,
-        bottom: -20,
-        left: -20,
-        right: -20,
-        backgroundColor: colors.cyberPink,
-        opacity: 0.05,
-        borderRadius: 50,
-        zIndex: -1,
+        paddingHorizontal: moderateScale(40),
+        overflow: 'visible',
     },
     signatureLine: {
-        height: verticalScale(3),
-        backgroundColor: colors.cyberGold,
+        height: verticalScale(2),
+        backgroundColor: colors.gold,
         borderRadius: 2,
-        shadowColor: colors.cyberGold,
-        shadowOpacity: 0.5,
-        shadowRadius: 10,
+        shadowColor: colors.gold,
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
     },
     labelCaps: {
-        ...typography.labelCaps,
-        color: colors.textOnDark,
-        fontSize: responsiveFontSize(11),
-        opacity: 0.8,
-    },
-    estText: {
-        ...typography.caption,
-        color: colors.cyberGold,
-        fontSize: 9,
-        marginTop: 4,
-        opacity: 0.4,
+        fontFamily: 'PlayfairDisplay_700Bold',
+        color: colors.gold,
+        fontSize: responsiveFontSize(12),
+        letterSpacing: 3,
+        opacity: 0.9,
     },
     loaderContainer: {
         position: 'absolute',
-        bottom: height * 0.08,
-        width: '60%',
+        bottom: height * 0.12,
+        width: '40%',
         alignItems: 'center',
     },
     loaderTrack: {
         width: '100%',
-        height: 2,
-        backgroundColor: 'rgba(255,255,255,0.05)',
+        height: 1,
+        backgroundColor: 'rgba(0,0,0,0.05)',
         borderRadius: 1,
         overflow: 'hidden',
     },
     loaderFill: {
         width: '100%',
         height: '100%',
-        opacity: 0.5,
+        opacity: 0.8,
     },
 });

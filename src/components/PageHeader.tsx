@@ -6,12 +6,14 @@ import { responsiveFontSize, moderateScale } from '../theme/responsive';
 import { Feather } from '@expo/vector-icons';
 
 interface PageHeaderProps {
-    title: string;
+    title?: string;
     rightIcon?: string;
     onRightPress?: () => void;
+    leftIcon?: string;
+    onLeftPress?: () => void;
 }
 
-export function PageHeader({ title, rightIcon, onRightPress }: PageHeaderProps) {
+export function PageHeader({ title, rightIcon, onRightPress, leftIcon, onLeftPress }: PageHeaderProps) {
     const insets = useSafeAreaInsets();
     const Container = Platform.OS === 'ios' ? BlurView : View;
 
@@ -23,26 +25,27 @@ export function PageHeader({ title, rightIcon, onRightPress }: PageHeaderProps) 
                 style={[
                     styles.container,
                     {
-                        paddingTop: Math.max(insets.top, spacing.md),
+                        paddingTop: insets.top,
                     }
                 ]}
             >
-                <Text style={styles.logo}>Pinky</Text>
-                {!rightIcon && (
-                    <View style={styles.titleWrapper}>
-                        <Text style={styles.title}>{title.toUpperCase()}</Text>
-                        <View style={styles.dot} />
+                <View style={styles.content}>
+                    <View style={styles.leftActionWrapper}>
+                        {leftIcon && onLeftPress && (
+                            <TouchableOpacity
+                                onPress={onLeftPress}
+                                style={styles.leftAction}
+                                activeOpacity={0.7}
+                            >
+                                <Feather name={leftIcon as any} size={24} color={colors.primary} />
+                            </TouchableOpacity>
+                        )}
                     </View>
-                )}
-                {rightIcon && onRightPress && (
-                    <TouchableOpacity
-                        onPress={onRightPress}
-                        style={styles.rightAction}
-                        activeOpacity={0.7}
-                    >
-                        <Feather name={rightIcon as any} size={20} color={colors.primary} />
-                    </TouchableOpacity>
-                )}
+
+                    <View style={styles.logoContainer} pointerEvents="none">
+                        <Text style={styles.logo}>Pink Pill </Text>
+                    </View>
+                </View>
             </Container>
         </View>
     );
@@ -57,41 +60,39 @@ const styles = StyleSheet.create({
         zIndex: 100,
     },
     container: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingBottom: moderateScale(spacing.md),
-        paddingHorizontal: spacing.xl,
-        backgroundColor: Platform.OS === 'ios' ? 'transparent' : 'rgba(15, 8, 20, 0.88)',
-        borderBottomLeftRadius: 20,
-        borderBottomRightRadius: 20,
+        backgroundColor: Platform.OS === 'ios' ? 'transparent' : 'rgba(255, 252, 249, 0.9)',
         borderBottomWidth: 1,
-        borderBottomColor: 'rgba(255, 255, 255, 0.06)',
-        overflow: 'hidden',
+        borderBottomColor: 'rgba(0, 0, 0, 0.05)',
+    },
+    content: {
+        height: moderateScale(56),
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: spacing.xl,
+    },
+    leftActionWrapper: {
+        position: 'absolute',
+        left: spacing.xl,
+        zIndex: 10,
+        height: '100%',
+        justifyContent: 'center',
+    },
+    logoContainer: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1,
     },
     logo: {
         fontFamily: 'Allura_400Regular',
-        color: colors.cyberPink,
-        fontSize: responsiveFontSize(28),
-        flex: 1,
+        color: colors.primary,
+        fontSize: responsiveFontSize(32),
+        marginBottom: Platform.OS === 'ios' ? 0 : 4,
+        paddingHorizontal: moderateScale(20),
+        overflow: 'visible',
     },
-    titleWrapper: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-    },
-    title: {
-        ...typography.labelCaps,
-        color: colors.textOnDark,
-        opacity: 0.9,
-    },
-    dot: {
-        width: 6,
-        height: 6,
-        borderRadius: 3,
-        backgroundColor: colors.cyberGold,
-    },
-    rightAction: {
+    leftAction: {
         padding: spacing.sm,
-    }
+    },
 });

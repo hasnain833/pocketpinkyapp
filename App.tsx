@@ -3,7 +3,7 @@ import { StyleSheet, View, Text, TouchableOpacity, Dimensions } from 'react-nati
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+
 import * as SplashScreen from 'expo-splash-screen';
 import { useFonts } from 'expo-font';
 import {
@@ -19,76 +19,27 @@ import {
 } from '@expo-google-fonts/inter';
 import { Feather } from '@expo/vector-icons';
 
-import { ChatScreen, ServicesScreen, ProfileScreen, WelcomeScreen, HomeScreen, AuthScreen, QuizScreen } from './src/screens';
+import { ChatScreen, ProfileScreen, WelcomeScreen, AuthScreen } from './src/screens';
 import { colors, spacing, typography } from './src/theme';
 import { supabase } from './src/services/supabase';
 import { Session } from '@supabase/supabase-js';
 import * as Notifications from 'expo-notifications';
 import { registerForPushNotifications, addNotificationReceivedListener, addNotificationResponseListener } from './src/services/notifications';
+import './src/services/firebase';
+import { createDrawerNavigator } from '@react-navigation/drawer';
+import { Sidebar } from './src/components';
 
 const { width } = Dimensions.get('window');
-const Tab = createBottomTabNavigator();
+
+const Drawer = createDrawerNavigator();
 
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync();
 
-function CustomTabBar({ state, descriptors, navigation }: any) {
-  const currentRoute = state.routes[state.index]?.name;
-  if (currentRoute === 'Chat') return null;
 
-  return (
-    <View style={styles.tabBarContainer}>
-      <View style={styles.tabBar}>
-        {state.routes.map((route: any, index: number) => {
-          // const { options } = descriptors[route.key];
-          const isFocused = state.index === index;
-
-          const onPress = () => {
-            const event = navigation.emit({
-              type: 'tabPress',
-              target: route.key,
-              canPreventDefault: true,
-            });
-
-            if (!isFocused && !event.defaultPrevented) {
-              navigation.navigate(route.name);
-            }
-          };
-
-          const icons: any = {
-            Home: 'home',
-            Chat: 'message-circle',
-            Services: 'layers',
-            Profile: 'user',
-          };
-
-          return (
-            <TouchableOpacity
-              key={state.routes[index].key}
-              onPress={onPress}
-              style={styles.tabItem}
-              activeOpacity={0.7}
-            >
-              <Feather
-                name={icons[route.name]}
-                size={20}
-                color={isFocused ? colors.cyberPink : colors.textOnDark}
-                style={[styles.tabIcon, isFocused && styles.tabIconActive]}
-              />
-              <Text style={[styles.tabLabel, isFocused && styles.tabLabelActive]}>
-                {route.name.toUpperCase()}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-    </View>
-  );
-}
 
 export default function App() {
   const [showWelcome, setShowWelcome] = useState(true);
-  const [quizCompleted, setQuizCompleted] = useState<boolean | null>(null);
   const [session, setSession] = useState<Session | null>(null);
 
   const [fontsLoaded] = useFonts({
@@ -101,12 +52,7 @@ export default function App() {
     Inter_700Bold,
   });
 
-  const checkQuizStatus = useCallback((session: Session) => {
-    const completed = session.user.user_metadata?.quiz_completed;
-    if (quizCompleted !== !!completed) {
-      setQuizCompleted(!!completed);
-    }
-  }, [quizCompleted]);
+
 
   const lastToken = useRef<string | null>(null);
 
@@ -119,7 +65,6 @@ export default function App() {
           console.log('[App] Initial Session Found:', session.user.email);
           lastToken.current = session.access_token;
           setSession(session);
-          checkQuizStatus(session);
           registerForPushNotifications().catch(() => { });
         }
       });
@@ -135,10 +80,7 @@ export default function App() {
       setSession(session);
 
       if (session) {
-        checkQuizStatus(session);
         registerForPushNotifications().catch(() => { });
-      } else {
-        setQuizCompleted(null);
       }
     });
 
@@ -155,7 +97,7 @@ export default function App() {
       notificationListener.remove();
       responseListener.remove();
     };
-  }, [checkQuizStatus]);
+  }, []);
 
 
   const onLayoutRootView = useCallback(async () => {
@@ -172,21 +114,25 @@ export default function App() {
     mainContent = <WelcomeScreen onFinish={() => setShowWelcome(false)} />;
   } else if (!session) {
     mainContent = <AuthScreen />;
-  } else if (quizCompleted === false) {
-    mainContent = <QuizScreen navigation={null} onComplete={() => setQuizCompleted(true)} />;
   } else {
     mainContent = (
       <NavigationContainer>
         <StatusBar style="light" />
-        <Tab.Navigator
-          tabBar={(props) => <CustomTabBar {...props} />}
-          screenOptions={{ headerShown: false }}
+        <Drawer.Navigator
+          drawerContent={(props) => <Sidebar {...props} />}
+          screenOptions={{
+            headerShown: false,
+            drawerType: 'front',
+            drawerStyle: {
+              width: '63%',
+              backgroundColor: colors.cream,
+            },
+            overlayColor: 'rgba(0,0,0,0.5)',
+          }}
         >
-          <Tab.Screen name="Home" component={HomeScreen} />
-          <Tab.Screen name="Chat" component={ChatScreen} />
-          <Tab.Screen name="Services" component={ServicesScreen} />
-          <Tab.Screen name="Profile" component={ProfileScreen} />
-        </Tab.Navigator>
+          <Drawer.Screen name="Chat" component={ChatScreen} />
+          <Drawer.Screen name="Profile" component={ProfileScreen} />
+        </Drawer.Navigator>
       </NavigationContainer>
     );
   }
@@ -202,48 +148,6 @@ export default function App() {
 
 
 const styles = StyleSheet.create({
-  tabBarContainer: {
-    position: 'absolute',
-    bottom: spacing.xl,
-    left: spacing.xl,
-    right: spacing.xl,
-    alignItems: 'center',
-  },
-  tabBar: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(20, 10, 30, 0.85)', // More discrete glass
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    borderRadius: 40,
-    width: '100%',
-    justifyContent: 'space-around',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 0, 255, 0.1)',
-  },
-  tabItem: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  tabIcon: {
-    opacity: 0.4,
-    marginBottom: 4,
-  },
-  tabIconActive: {
-    opacity: 1,
-    transform: [{ scale: 1.1 }],
-    textShadowColor: colors.cyberPink,
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 10,
-  },
-  tabLabel: {
-    ...typography.labelCaps,
-    fontSize: 9,
-    color: colors.textOnDark,
-    opacity: 0.4,
-  },
-  tabLabelActive: {
-    opacity: 1,
-    color: colors.cyberPink,
-  },
+
 });
 

@@ -16,6 +16,7 @@ import { moderateScale, verticalScale, horizontalScale, responsiveFontSize } fro
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Toast, ForgotPasswordModal } from '../components';
 import { supabase } from '../services/supabase';
+import { Feather } from '@expo/vector-icons';
 
 export function AuthScreen() {
     const [toast, setToast] = useState<{ message: string; type: 'success' | 'error'; visible: boolean }>({
@@ -28,6 +29,7 @@ export function AuthScreen() {
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [loading, setLoading] = useState(false);
+
     const [isSignUp, setIsSignUp] = useState(false);
     const [showForgotPassword, setShowForgotPassword] = useState(false);
 
@@ -78,6 +80,8 @@ export function AuthScreen() {
         setLoading(false);
     }
 
+
+
     return (
         <View style={styles.container}>
             <Toast
@@ -111,7 +115,7 @@ export function AuthScreen() {
                         showsVerticalScrollIndicator={false}
                     >
                         <View style={styles.header}>
-                            <Text style={styles.bgLogo}>Pinky</Text>
+                            <Text style={styles.bgLogo}>Pink</Text>
                             <Text style={styles.editorialHeadline}>
                                 {isSignUp ? 'Join the' : 'Welcome'}
                                 {'\n'}
@@ -208,6 +212,8 @@ export function AuthScreen() {
                                     )}
                                 </LinearGradient>
                             </TouchableOpacity>
+
+
 
                             <TouchableOpacity
                                 style={styles.switchButton}
@@ -320,4 +326,5 @@ const styles = StyleSheet.create({
         color: colors.cyberPink,
         fontSize: responsiveFontSize(13),
     },
+
 });

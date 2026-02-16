@@ -1,7 +1,4 @@
-export * from './HomeScreen';
-export * from './ChatScreen';
-export * from './AuthScreen';
-export * from './QuizScreen';
-export * from './ServicesScreen';
-export * from './ProfileScreen';
-export * from './WelcomeScreen';
+export { WelcomeScreen } from './WelcomeScreen';
+export { AuthScreen } from './AuthScreen';
+export { ChatScreen } from './ChatScreen';
+export { ProfileScreen } from './ProfileScreen';
