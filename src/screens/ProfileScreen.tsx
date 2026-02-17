@@ -1,34 +1,35 @@
 import { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Image, TextInput, ActivityIndicator, Linking } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Linking, Alert } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 
 import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
 import { Feather } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
-import { decode } from 'base64-arraybuffer';
 import { colors, spacing, typography, radii } from '../theme';
 import { horizontalScale, verticalScale, moderateScale, responsiveFontSize } from '../theme/responsive';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PageHeader, Toast } from '../components';
 import { supabase } from '../services/supabase';
+import { botpress } from '../services/botpress';
 
-const UPGRADE_URL = process.env.EXPO_PUBLIC_UPGRADE_URL || 'https://pocket-pinky-vetting-app.vercel.app/#pricing';
+const UPGRADE_URL = process.env.EXPO_PUBLIC_UPGRADE_URL;
 
 export function ProfileScreen() {
   const navigation = useNavigation();
 
   const [loading, setLoading] = useState(false);
-  const [uploading, setUploading] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   const [profile, setProfile] = useState({
     id: '',
     name: '',
     email: '',
-    avatarUrl: '',
-    age: '',
-    subscriptionTier: 'free', // 'free', 'premium', 'annual'
+    subscriptionTier: 'free',
+  });
+
+  const [passwordState, setPasswordState] = useState({
+    newPassword: '',
+    confirmPassword: '',
   });
 
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error'; visible: boolean }>({
@@ -60,8 +61,6 @@ export function ProfileScreen() {
           id: user.id,
           name: user.user_metadata?.full_name || 'Queen',
           email: user.email || '',
-          avatarUrl: user.user_metadata?.avatar_url || '',
-          age: '',
           subscriptionTier: 'free',
         });
       } else if (data) {
@@ -69,13 +68,14 @@ export function ProfileScreen() {
           id: user.id,
           name: data.full_name || user.user_metadata?.full_name || 'Queen',
           email: user.email || '',
-          avatarUrl: data.avatar_url || '',
-          age: data.age || '',
           subscriptionTier: data.plan || 'free',
         });
+        console.log('Profile:', profile);
       }
     } catch (error) {
       console.log('Error fetching profile:', error);
+    } finally {
+      setIsLoading(false);
     }
   }
 
@@ -97,8 +97,6 @@ export function ProfileScreen() {
       const updates = {
         id: userId,
         full_name: profile.name,
-        age: profile.age,
-        avatar_url: profile.avatarUrl,
         updated_at: new Date(),
       };
 
@@ -107,11 +105,40 @@ export function ProfileScreen() {
 
       // Also update auth metadata for name
       await supabase.auth.updateUser({
-        data: { full_name: profile.name, avatar_url: profile.avatarUrl }
+        data: { full_name: profile.name }
       });
 
+      // Handle Password Change if fields are filled
+      if (passwordState.newPassword) {
+        if (passwordState.newPassword !== passwordState.confirmPassword) {
+          throw new Error('Passwords do not match');
+        }
+        if (passwordState.newPassword.length < 6) {
+          throw new Error('Password must be at least 6 characters');
+        }
+
+        const { error: passwordError } = await supabase.auth.updateUser({
+          password: passwordState.newPassword
+        });
+
+        if (passwordError) throw passwordError;
+        setToast({ message: 'Profile & Password updated!', type: 'success', visible: true });
+        setPasswordState({ newPassword: '', confirmPassword: '' });
+      } else {
+        setToast({ message: 'Profile updated!', type: 'success', visible: true });
+      }
+
       setIsEditing(false);
-      setToast({ message: 'Profile updated!', type: 'success', visible: true });
+
+      // Sync with Botpress
+      console.log('[ProfileScreen] Syncing with Botpress:', {
+        name: profile.name,
+        subscriptionTier: profile.subscriptionTier
+      });
+      await botpress.updateUser({
+        name: profile.name,
+        subscriptionTier: profile.subscriptionTier
+      });
     } catch (error: any) {
       setToast({ message: error?.message ?? 'Something went wrong', type: 'error', visible: true });
     } finally {
@@ -119,53 +146,16 @@ export function ProfileScreen() {
     }
   }
 
-  async function pickImage() {
+  async function handleForgotPassword() {
+    if (!profile.email) return;
     try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        setToast({ message: 'Allow access to photos to change your avatar.', type: 'error', visible: true });
-        return;
-      }
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.5,
-        base64: true,
+      const { error } = await supabase.auth.resetPasswordForEmail(profile.email, {
+        redirectTo: 'https://pocket-pinky-vetting-app.vercel.app/reset-password', // Update with your actual URL
       });
-
-      if (!result.canceled && result.assets[0]?.base64) {
-        await uploadImage(result.assets[0].base64);
-      }
-    } catch (error: any) {
-      setToast({ message: error?.message ?? 'Could not open image picker', type: 'error', visible: true });
-    }
-  }
-
-  async function uploadImage(base64Image: string) {
-    if (!base64Image?.length || !profile.id) return;
-    setUploading(true);
-    try {
-      const buffer = decode(base64Image);
-      const fileName = `${profile.id}/${Date.now()}.jpg`;
-      const { error } = await supabase.storage
-        .from('avatars')
-        .upload(fileName, buffer, {
-          contentType: 'image/jpeg',
-          upsert: true,
-        });
-
       if (error) throw error;
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('avatars')
-        .getPublicUrl(fileName);
-
-      setProfile(prev => ({ ...prev, avatarUrl: publicUrl }));
+      setToast({ message: 'Password reset email sent!', type: 'success', visible: true });
     } catch (error: any) {
-      setToast({ message: error?.message ?? 'Upload failed', type: 'error', visible: true });
-    } finally {
-      setUploading(false);
+      setToast({ message: error.message || 'Error sending reset email', type: 'error', visible: true });
     }
   }
 
@@ -208,7 +198,6 @@ export function ProfileScreen() {
         leftIcon="menu"
         onLeftPress={() => (navigation as any).openDrawer()}
       />
-
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={[
@@ -222,40 +211,6 @@ export function ProfileScreen() {
       >
         {/* Hero Section */}
         <View style={styles.heroSection}>
-          <TouchableOpacity
-            activeOpacity={0.9}
-            onPress={isEditing ? pickImage : undefined}
-            style={styles.avatarContainer}
-          >
-            <LinearGradient
-              colors={[colors.gold, colors.primary]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.avatarRing}
-            >
-              <View style={styles.avatarInner}>
-                {profile.avatarUrl ? (
-                  <Image source={{ uri: profile.avatarUrl }} style={styles.avatar} />
-                ) : (
-                  <View style={styles.avatarPlaceholder}>
-                    <Text style={styles.avatarInitials}>
-                      {profile.name ? profile.name.charAt(0).toUpperCase() : 'P'}
-                    </Text>
-                  </View>
-                )}
-                {isEditing && (
-                  <View style={styles.editBadge}>
-                    {uploading ? (
-                      <ActivityIndicator size="small" color="#fff" />
-                    ) : (
-                      <Feather name="camera" size={12} color="#fff" />
-                    )}
-                  </View>
-                )}
-              </View>
-            </LinearGradient>
-          </TouchableOpacity>
-
           <Text style={styles.userName}>{profile.name || 'Pink Pill User'}</Text>
           <Text style={styles.userEmail}>{profile.email}</Text>
 
@@ -265,7 +220,7 @@ export function ProfileScreen() {
               onPress={() => setIsEditing(true)}
               activeOpacity={0.7}
             >
-              <Text style={styles.editProfileText}>EDIT PROFILE</Text>
+              <Text style={styles.editProfileText}>EDIT SETTINGS</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -273,6 +228,9 @@ export function ProfileScreen() {
         {/* Edit Form */}
         {isEditing && (
           <View style={styles.editForm}>
+            <Text style={styles.sectionHeader}>PROFILE SETTINGS</Text>
+
+            {/* Name Change */}
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Full Name</Text>
               <TextInput
@@ -284,22 +242,44 @@ export function ProfileScreen() {
               />
             </View>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Age</Text>
+            {/* Password Change */}
+            <View style={[styles.inputGroup, { marginTop: spacing.md }]}>
+              <Text style={styles.inputLabel}>New Password (Optional)</Text>
               <TextInput
                 style={styles.input}
-                value={profile.age}
-                onChangeText={text => setProfile({ ...profile, age: text })}
-                placeholder="Enter age"
-                keyboardType="numeric"
+                value={passwordState.newPassword}
+                onChangeText={text => setPasswordState(prev => ({ ...prev, newPassword: text }))}
+                placeholder="New Password"
                 placeholderTextColor={colors.textMuted}
+                secureTextEntry
               />
             </View>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Confirm New Password</Text>
+              <TextInput
+                style={styles.input}
+                value={passwordState.confirmPassword}
+                onChangeText={text => setPasswordState(prev => ({ ...prev, confirmPassword: text }))}
+                placeholder="Confirm Password"
+                placeholderTextColor={colors.textMuted}
+                secureTextEntry
+              />
+            </View>
+
+            <TouchableOpacity
+              style={styles.forgotPasswordLink}
+              onPress={handleForgotPassword}
+            >
+              <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+            </TouchableOpacity>
 
             <View style={styles.editActions}>
               <TouchableOpacity
                 style={styles.cancelButton}
-                onPress={() => setIsEditing(false)}
+                onPress={() => {
+                  setIsEditing(false);
+                  setPasswordState({ newPassword: '', confirmPassword: '' });
+                }}
               >
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
@@ -321,31 +301,38 @@ export function ProfileScreen() {
         {/* Subscription Card */}
         <View style={styles.section}>
           <Text style={styles.sectionHeader}>MEMBERSHIP</Text>
-          <View style={styles.membershipCard}>
-            <View style={styles.membershipInfo}>
-              <View>
-                <Text style={styles.membershipTier}>{subscription.name}</Text>
-                <Text style={styles.membershipStatus}>Current Plan • {subscription.price}</Text>
-              </View>
+          {isLoading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={colors.primary} />
+              <Text style={styles.loadingText}>Loading...</Text>
             </View>
+          ) : (
+            <View style={styles.membershipCard}>
+              <View style={styles.membershipInfo}>
+                <View>
+                  <Text style={styles.membershipTier}>{subscription.name}</Text>
+                  <Text style={styles.membershipStatus}>Current Plan • {subscription.price}</Text>
+                </View>
+              </View>
 
-            {profile.subscriptionTier === 'free' && (
-              <TouchableOpacity
-                style={styles.upgradeBtn}
-                onPress={handleUpgrade}
-                activeOpacity={0.8}
-              >
-                <LinearGradient
-                  colors={colors.gradients.vibrant}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.upgradeBtnGradient}
+              {profile.subscriptionTier === 'free' && (
+                <TouchableOpacity
+                  style={styles.upgradeBtn}
+                  onPress={handleUpgrade}
+                  activeOpacity={0.8}
                 >
-                  <Text style={styles.upgradeBtnText}>UPGRADE TO PREMIUM</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-            )}
-          </View>
+                  <LinearGradient
+                    colors={colors.gradients.vibrant}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.upgradeBtnGradient}
+                  >
+                    <Text style={styles.upgradeBtnText}>UPGRADE TO PREMIUM</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
         </View>
 
         {/* Support Section */}
@@ -400,60 +387,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: spacing.xxl,
   },
-  avatarContainer: {
-    marginBottom: spacing.md,
-  },
-  avatarRing: {
-    width: moderateScale(110),
-    height: moderateScale(110),
-    borderRadius: moderateScale(55),
-    padding: 3,
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 4,
-    shadowColor: colors.gold,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-  },
-  avatarInner: {
-    width: moderateScale(100),
-    height: moderateScale(100),
-    borderRadius: moderateScale(50),
-    backgroundColor: colors.card,
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatar: {
-    width: '100%',
-    height: '100%',
-  },
-  avatarPlaceholder: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: colors.blush,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarInitials: {
-    fontFamily: 'PlayfairDisplay_700Bold',
-    fontSize: moderateScale(36),
-    color: colors.primary,
-  },
-  editBadge: {
-    position: 'absolute',
-    bottom: 2,
-    right: 2,
-    backgroundColor: colors.gold,
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#fff',
-  },
   userName: {
     fontFamily: 'PlayfairDisplay_700Bold',
     fontSize: responsiveFontSize(28),
@@ -471,6 +404,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 20,
+    marginTop: spacing.sm,
   },
   editProfileText: {
     ...typography.labelCaps,
@@ -508,11 +442,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
+  forgotPasswordLink: {
+    alignSelf: 'flex-end',
+    marginBottom: spacing.md,
+  },
+  forgotPasswordText: {
+    ...typography.caption,
+    color: colors.primary,
+    textDecorationLine: 'underline',
+  },
   editActions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
     gap: spacing.sm,
-    marginTop: spacing.md,
+    marginTop: spacing.sm,
   },
   cancelButton: {
     paddingVertical: 10,
@@ -530,6 +473,17 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     minWidth: 100,
     alignItems: 'center',
+  },
+
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    ...typography.caption,
+    marginTop: spacing.sm,
+    color: colors.textMuted,
   },
   saveButtonText: {
     ...typography.labelCaps,

@@ -23,9 +23,7 @@ import { ChatScreen, ProfileScreen, WelcomeScreen, AuthScreen } from './src/scre
 import { colors, spacing, typography } from './src/theme';
 import { supabase } from './src/services/supabase';
 import { Session } from '@supabase/supabase-js';
-import * as Notifications from 'expo-notifications';
-import { registerForPushNotifications, addNotificationReceivedListener, addNotificationResponseListener } from './src/services/notifications';
-import './src/services/firebase';
+
 import { createDrawerNavigator } from '@react-navigation/drawer';
 import { Sidebar } from './src/components';
 
@@ -65,7 +63,6 @@ export default function App() {
           console.log('[App] Initial Session Found:', session.user.email);
           lastToken.current = session.access_token;
           setSession(session);
-          registerForPushNotifications().catch(() => { });
         }
       });
 
@@ -78,24 +75,10 @@ export default function App() {
       console.log(`[App] Auth State Change Event: ${_event}`);
       lastToken.current = session?.access_token || null;
       setSession(session);
-
-      if (session) {
-        registerForPushNotifications().catch(() => { });
-      }
-    });
-
-    const notificationListener = addNotificationReceivedListener(notification => {
-      console.log('Notification received:', notification);
-    });
-
-    const responseListener = addNotificationResponseListener(response => {
-      console.log('Notification tapped:', response);
     });
 
     return () => {
       subscription.unsubscribe();
-      notificationListener.remove();
-      responseListener.remove();
     };
   }, []);
 

@@ -38,19 +38,8 @@
     },
     "plugins": [
       "expo-font",
-      "expo-secure-store",
-      [
-        "expo-image-picker",
-        {
-          "photosPermission": "Allow Pink Pill to access your photos to set your profile picture."
-        }
-      ],
-      "expo-notifications"
+      "expo-secure-store"
     ],
-    "notification": {
-      "icon": "./assets/logo.png",
-      "color": "#FF1493"
-    },
     "extra": {
       "eas": {
         "projectId": "64ace30f-9e44-4903-b508-550b7ebc15bb"

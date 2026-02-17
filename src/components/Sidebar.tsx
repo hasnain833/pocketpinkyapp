@@ -1,36 +1,56 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Alert } from 'react-native';
 import { DrawerContentComponentProps, useDrawerStatus } from '@react-navigation/drawer';
 import { Feather } from '@expo/vector-icons';
 import { colors, typography, spacing, responsiveFontSize } from '../theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../services/supabase';
 import { botpress } from '../services/botpress';
+import { checkSubscriptionTier } from '../services/subscriptionCheck';
+import { ConfirmationModal } from './ConfirmationModal';
+import { Toast } from './Toast';
 
 export function Sidebar(props: DrawerContentComponentProps) {
     const insets = useSafeAreaInsets();
     const drawerStatus = useDrawerStatus();
     const [conversations, setConversations] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(false);
+    const [activeId, setActiveId] = useState<string | null>(null);
+    const [isDeleteModalVisible, setIsDeleteModalVisible] = useState(false);
+    const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+    const [toast, setToast] = useState<{ visible: boolean; message: string; type: 'success' | 'error' }>({
+        visible: false,
+        message: '',
+        type: 'success'
+    });
 
-    useEffect(() => {
-        if (drawerStatus === 'open') {
-            ensureInitAndFetch();
-        }
-    }, [drawerStatus]);
-
+    // Initial setup - only runs once on mount
     useEffect(() => {
         ensureInitAndFetch();
     }, []);
+
+    // Fast refresh when drawer opens - only fetch conversations
+    useEffect(() => {
+        if (drawerStatus === 'open') {
+            fetchHistory();
+        }
+    }, [drawerStatus]);
 
     const ensureInitAndFetch = async () => {
         try {
             const { data: { session } } = await supabase.auth.getSession();
             if (!session) return;
+
+            const plan = await checkSubscriptionTier(session.user.id);
+
             await botpress.createUser(session.user.id, {
                 email: session.user.email,
-                name: session.user.user_metadata?.full_name || 'Queen'
+                name: session.user.user_metadata?.full_name,
+                subscriptionTier: plan
             });
+            console.log('User email:', session.user.email);
+            console.log('User name:', session.user.user_metadata?.full_name);
+            console.log('User subscription tier:', plan);
 
             await fetchHistory();
         } catch (error) {
@@ -40,14 +60,11 @@ export function Sidebar(props: DrawerContentComponentProps) {
 
     const fetchHistory = async () => {
         try {
-            console.log('[Sidebar] Fetching history...');
             setIsLoading(true);
+            const currentId = botpress.getConversationId();
+            setActiveId(currentId);
             const response = await botpress.listConversations();
-            console.log('[Sidebar] Conversations count:', response?.conversations?.length || 0);
             if (response && response.conversations) {
-                if (response.conversations.length > 0) {
-                    console.log('[Sidebar] Sample conversation:', JSON.stringify(response.conversations[0], null, 2));
-                }
                 setConversations(response.conversations);
             }
         } catch (error) {
@@ -75,25 +92,40 @@ export function Sidebar(props: DrawerContentComponentProps) {
         props.navigation.closeDrawer();
     };
 
-    const handleDeleteConversation = async (id: string) => {
-        try {
-            await botpress.deleteConversation(id);
-            setConversations(prev => prev.filter(c => c.id !== id));
-        } catch (error) {
-            console.error('Delete Conversation Error:', error);
-        }
+    const handleDeleteConversation = (id: string) => {
+        setPendingDeleteId(id);
+        setIsDeleteModalVisible(true);
     };
 
-    const formatDate = (dateStr: string) => {
-        const d = new Date(dateStr);
-        const now = new Date();
-        const diff = now.getTime() - d.getTime();
-        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const confirmDelete = async () => {
+        if (!pendingDeleteId) return;
 
-        if (days === 0) return 'Today';
-        if (days === 1) return 'Yesterday';
-        if (days < 7) return `${days} days ago`;
-        return d.toLocaleDateString();
+        try {
+            setIsDeleteModalVisible(false); // Close immediately for responsiveness
+            await botpress.deleteConversation(pendingDeleteId);
+            setConversations(prev => prev.filter(c => c.id !== pendingDeleteId));
+
+            // Show toast feedback
+            setToast({
+                visible: true,
+                message: 'Chat deleted successfully',
+                type: 'success'
+            });
+
+            // If deleted chat was active, create new chat
+            if (pendingDeleteId === activeId) {
+                props.navigation.navigate('Chat', { conversationId: null, timestamp: Date.now() });
+            }
+        } catch (error) {
+            console.error('Delete Conversation Error:', error);
+            setToast({
+                visible: true,
+                message: 'Failed to delete chat',
+                type: 'error'
+            });
+        } finally {
+            setPendingDeleteId(null);
+        }
     };
 
     const menuItems = [
@@ -122,31 +154,37 @@ export function Sidebar(props: DrawerContentComponentProps) {
                         {conversations.length === 0 ? (
                             <Text style={styles.emptyText}>No recent chats</Text>
                         ) : (
-                            conversations.map((chat) => (
-                                <View key={chat.id} style={styles.historyItem}>
-                                    <View style={styles.historyItemContent}>
-                                        <TouchableOpacity
-                                            style={styles.historyMainClick}
-                                            onPress={() => handleSelectChat(chat.id)}
-                                        >
-                                            <Feather name="message-square" size={16} color={colors.primary} />
-                                            <View style={styles.historyTextContainer}>
-                                                <Text style={styles.historyTitle} numberOfLines={1}>
-                                                    Chat session
-                                                </Text>
-                                                <Text style={styles.historyDate}>{formatDate(chat.createdAt)}</Text>
-                                            </View>
-                                        </TouchableOpacity>
+                            conversations.map((chat) => {
+                                const isActive = chat.id === activeId;
+                                return (
+                                    <View key={chat.id} style={[styles.historyItem, isActive && styles.activeHistoryItem]}>
+                                        <View style={styles.historyItemContent}>
+                                            <TouchableOpacity
+                                                style={styles.historyMainClick}
+                                                onPress={() => handleSelectChat(chat.id)}
+                                            >
+                                                <Feather
+                                                    name="message-square"
+                                                    size={16}
+                                                    color={isActive ? colors.primary : colors.textMuted}
+                                                />
+                                                <View style={styles.historyTextContainer}>
+                                                    <Text style={[styles.historyTitle, isActive && styles.activeHistoryTitle]} numberOfLines={1}>
+                                                        Chat session
+                                                    </Text>
+                                                </View>
+                                            </TouchableOpacity>
 
-                                        <TouchableOpacity
-                                            style={styles.deleteHistoryButton}
-                                            onPress={() => handleDeleteConversation(chat.id)}
-                                        >
-                                            <Feather name="trash-2" size={14} color={colors.textMuted} />
-                                        </TouchableOpacity>
+                                            <TouchableOpacity
+                                                style={styles.deleteHistoryButton}
+                                                onPress={() => handleDeleteConversation(chat.id)}
+                                            >
+                                                <Feather name="trash-2" size={14} color={colors.textMuted} />
+                                            </TouchableOpacity>
+                                        </View>
                                     </View>
-                                </View>
-                            ))
+                                );
+                            })
                         )}
                     </ScrollView>
                 )}
@@ -170,6 +208,27 @@ export function Sidebar(props: DrawerContentComponentProps) {
                     <Text style={styles.logoutText}>Log Out</Text>
                 </TouchableOpacity>
             </View>
+
+            {/* Confirm Delete Modal */}
+            <ConfirmationModal
+                visible={isDeleteModalVisible}
+                title="Delete Chat"
+                message="Are you sure you want to delete this conversation? This action cannot be undone."
+                confirmText="Delete"
+                onConfirm={confirmDelete}
+                onCancel={() => {
+                    setIsDeleteModalVisible(false);
+                    setPendingDeleteId(null);
+                }}
+            />
+
+            {/* Toast Feedback */}
+            <Toast
+                visible={toast.visible}
+                message={toast.message}
+                type={toast.type}
+                onHide={() => setToast(prev => ({ ...prev, visible: false }))}
+            />
         </View>
     );
 }
@@ -233,6 +292,11 @@ const styles = StyleSheet.create({
         borderColor: colors.border,
         overflow: 'hidden',
     },
+    activeHistoryItem: {
+        backgroundColor: colors.accentLight,
+        borderColor: colors.primary,
+        borderWidth: 1.5,
+    },
     historyItemContent: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -255,6 +319,9 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: colors.textPrimary,
         fontFamily: 'Inter_600SemiBold',
+    },
+    activeHistoryTitle: {
+        color: colors.primary,
     },
     historyDate: {
         ...typography.bodySmall,

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   StyleSheet,
   View,
@@ -17,6 +17,7 @@ import { Feather } from '@expo/vector-icons';
 import { PageHeader, Toast } from '../components';
 import { supabase } from '../services/supabase';
 import { botpress, Message } from '../services/botpress';
+import { checkSubscriptionTier } from '../services/subscriptionCheck';
 import { colors, spacing, typography } from '../theme';
 import { moderateScale, responsiveFontSize } from '../theme/responsive';
 
@@ -60,6 +61,8 @@ const TypingDots = () => {
 export function ChatScreen({ navigation, route }: any) {
   const insets = useSafeAreaInsets();
   const flatListRef = useRef<FlatList>(null);
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   const [user, setUser] = useState<any>(null);
   const [botpressUserId, setBotpressUserId] = useState<string | null>(null);
@@ -70,6 +73,9 @@ export function ChatScreen({ navigation, route }: any) {
 
   // New Chat State
   const [isInitialLoad, setIsInitialLoad] = useState(true);
+
+  // Cache user data to avoid redundant API calls
+  const [cachedSubscriptionTier, setCachedSubscriptionTier] = useState<string | null>(null);
 
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error'; visible: boolean }>({
     message: '',
@@ -87,11 +93,36 @@ export function ChatScreen({ navigation, route }: any) {
       // If we are already loaded and params are cleared (New Chat from Sidebar)
       startNewChat();
     }
-  }, [route.params?.conversationId]);
+  }, [route.params?.conversationId, route.params?.timestamp]);
 
   useEffect(() => {
     initChat();
   }, []);
+
+  useEffect(() => {
+    if (Platform.OS === 'android') {
+      const showSubscription = Keyboard.addListener('keyboardDidShow', (e) => {
+        setKeyboardHeight(e.endCoordinates.height);
+      });
+      const hideSubscription = Keyboard.addListener('keyboardDidHide', () => {
+        setKeyboardHeight(0);
+      });
+
+      return () => {
+        showSubscription.remove();
+        hideSubscription.remove();
+      };
+    }
+  }, []);
+
+  // Auto-scroll to bottom when messages change or bot starts typing
+  useEffect(() => {
+    if (flatListRef.current) {
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 200);
+    }
+  }, [messages.length, isBotTyping]);
 
   const refreshMessages = async () => {
     setIsLoading(true);
@@ -113,10 +144,43 @@ export function ChatScreen({ navigation, route }: any) {
 
       setUser(session.user);
 
+      // 1. Get current plan from Supabase
+      const plan = await checkSubscriptionTier(session.user.id);
+      const normalizedPlan = plan?.toLowerCase();
+      console.log('[ChatScreen] Supabase Subscription Plan Detected:', plan);
+
+      // If we detect a local plan change (e.g. they just upgraded), 
+      // we might want to reset the conversation to force a fresh bot session
+      if (cachedSubscriptionTier && cachedSubscriptionTier !== plan) {
+        if (normalizedPlan === 'premium') {
+          console.log('[ChatScreen] Plan upgraded to premium, resetting conversation...');
+          botpress.clearConversation();
+        }
+      }
+      setCachedSubscriptionTier(plan);
+
+      // 2. Initialize/Create user in Botpress FIRST to establish session
       const bpUser = await botpress.createUser(session.user.id, {
         email: session.user.email,
-        name: session.user.user_metadata?.full_name || 'Queen'
+        name: session.user.user_metadata?.full_name || 'Queen',
+        subscriptionTier: plan
       });
+      console.log('[ChatScreen] Botpress User Initialized:', bpUser?.botpressUserId);
+
+      // 3. Explicitly Sync profile to ensure variables are forced
+      await botpress.syncUser({
+        subscriptionTier: plan
+      });
+
+      if (normalizedPlan === 'premium') {
+        setToast({ message: `✨ Active Plan : ${plan}`, type: 'success', visible: true });
+        if (!cachedSubscriptionTier) {
+          console.log('[ChatScreen] First load as Premium: Clearing conversation to sync new variables');
+          botpress.clearConversation();
+        }
+      } else {
+        setToast({ message: `Active Plan: ${plan}`, type: 'success', visible: true });
+      }
 
       const internalId = bpUser?.botpressUserId || bpUser?.user?.id || bpUser?.id;
       setBotpressUserId(internalId);
@@ -140,6 +204,7 @@ export function ChatScreen({ navigation, route }: any) {
   const fetchMessages = async () => {
     try {
       const response = await botpress.listMessages();
+      console.log('[ChatScreen] Raw response from Botpress:', JSON.stringify(response, null, 2));
       const currentInternalId = botpress.getInternalUserId();
       if (currentInternalId && currentInternalId !== botpressUserId) {
         setBotpressUserId(currentInternalId);
@@ -159,33 +224,70 @@ export function ChatScreen({ navigation, route }: any) {
     }
   };
 
-  const startPolling = () => {
+  const startPolling = useCallback(() => {
+    // Clear any existing polling interval
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+    }
+
     let attempts = 0;
-    const maxAttempts = 15;
-    const interval = setInterval(async () => {
+    const maxAttempts = 20; // Increased attempts
+    const seenMessageIds = new Set(messages.map(m => m.id));
+
+    pollingIntervalRef.current = setInterval(async () => {
       attempts++;
       const response = await botpress.listMessages();
       if (response && response.messages) {
-        const sorted = response.messages.reverse();
-        setMessages(sorted);
+        const filtered = response.messages.filter((m: any) => {
+          if (!m.payload) return false;
+          return m.payload.text || m.payload.type === 'choice' || m.payload.type === 'text';
+        });
+
+        const sorted = filtered.reverse();
+
+        // Deduplicate messages
+        const newMessages = sorted.filter((m: any) => {
+          if (seenMessageIds.has(m.id)) return true;
+          seenMessageIds.add(m.id);
+          return true;
+        });
+
+        setMessages(newMessages);
 
         const lastMsg = sorted[sorted.length - 1];
         const isBotMessage = lastMsg && lastMsg.direction === 'incoming';
 
-        if (isBotMessage) {
-          clearInterval(interval);
-          setIsBotTyping(false);
+        if (isBotMessage && !lastMsg.id.startsWith('temp-')) {
+          if (!seenMessageIds.has(lastMsg.id)) {
+            if (pollingIntervalRef.current) {
+              clearInterval(pollingIntervalRef.current);
+              pollingIntervalRef.current = null;
+            }
+            setIsBotTyping(false);
+          }
         }
       }
 
       if (attempts >= maxAttempts) {
-        clearInterval(interval);
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current);
+          pollingIntervalRef.current = null;
+        }
         setIsBotTyping(false);
       }
-    }, 1500);
-  };
+    }, 800);
+  }, [messages]);
 
-  const handleSend = async () => {
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
+    };
+  }, []);
+
+  const handleSend = useCallback(async () => {
     if (!inputText.trim()) return;
 
     const userMessageText = inputText.trim();
@@ -210,9 +312,9 @@ export function ChatScreen({ navigation, route }: any) {
       setToast({ message: 'Message failed to send', type: 'error', visible: true });
       setIsBotTyping(false);
     }
-  };
+  }, [inputText, botpressUserId, startPolling]);
 
-  const handleChoiceSelect = async (label: string) => {
+  const handleChoiceSelect = useCallback(async (label: string) => {
     const tempMsg: any = {
       id: `temp-${Date.now()}`,
       payload: { type: 'text', text: label },
@@ -231,9 +333,9 @@ export function ChatScreen({ navigation, route }: any) {
       setToast({ message: 'Failed to send choice', type: 'error', visible: true });
       setIsBotTyping(false);
     }
-  };
+  }, [botpressUserId, startPolling]);
 
-  const renderMessage = ({ item }: { item: any }) => {
+  const renderMessage = useCallback(({ item }: { item: any }) => {
     const isUser = item.direction === 'outgoing' || (item.userId && item.userId === botpressUserId);
     const isChoice = item.payload?.type === 'choice';
 
@@ -271,7 +373,22 @@ export function ChatScreen({ navigation, route }: any) {
         </View>
       </View>
     );
-  };
+  }, [botpressUserId, handleChoiceSelect]);
+
+  // FlatList optimization: getItemLayout for better scroll performance
+  const getItemLayout = useCallback((data: any, index: number) => ({
+    length: 80, // Approximate message height
+    offset: 80 * index,
+    index,
+  }), []);
+
+  const renderFooter = useCallback(() => (
+    isBotTyping ? (
+      <View style={styles.typingWrapper}>
+        <TypingDots />
+      </View>
+    ) : <View style={{ height: spacing.sm }} />
+  ), [isBotTyping]);
 
   const renderWelcome = () => (
     <View style={styles.welcomeContainer}>
@@ -290,10 +407,11 @@ export function ChatScreen({ navigation, route }: any) {
 
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardView}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 25}
+        enabled={true}
+        style={[styles.keyboardView, { flex: 1 }]}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 20}
       >
-        <View style={styles.flatListWrapper}>
+        <View style={[styles.flatListWrapper, { flex: 1 }]}>
           {isLoading ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color={colors.primary} />
@@ -304,26 +422,32 @@ export function ChatScreen({ navigation, route }: any) {
               ref={flatListRef}
               data={messages}
               renderItem={renderMessage}
-              keyExtractor={item => item.id}
-              contentContainerStyle={[
-                styles.messagesList,
-                { paddingTop: HEADER_HEIGHT + spacing.md, flexGrow: 1 }
-              ]}
-              ListEmptyComponent={renderWelcome}
-              ListFooterComponent={() => (
-                isBotTyping ? (
-                  <View style={styles.typingWrapper}>
-                    <TypingDots />
-                  </View>
-                ) : <View style={{ height: spacing.lg }} />
-              )}
+              keyExtractor={(item, index) => item.id || index.toString()}
+              contentContainerStyle={styles.messagesList}
+              inverted={false}
               onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
-              onLayout={() => flatListRef.current?.scrollToEnd({ animated: true })}
+              onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
+              ListEmptyComponent={renderWelcome}
+              ListFooterComponent={renderFooter}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled" // Important for scrolling while keyboard is open
+              getItemLayout={getItemLayout}
+              removeClippedSubviews={true}
+              windowSize={10}
+              maxToRenderPerBatch={10}
+              initialNumToRender={15}
             />
           )}
         </View>
 
-        <View style={styles.inputContainer}>
+        <View style={[
+          styles.inputContainer,
+          {
+            paddingBottom: (Platform.OS === 'android' && keyboardHeight > 0)
+              ? 10
+              : (insets.bottom || spacing.sm)
+          }
+        ]}>
           <View style={styles.inputWrapper}>
             <TextInput
               style={styles.input}
@@ -342,7 +466,6 @@ export function ChatScreen({ navigation, route }: any) {
               <Feather name="arrow-up" size={20} color="#fff" />
             </TouchableOpacity>
           </View>
-          <View style={{ height: insets.bottom || spacing.sm }} />
         </View>
       </KeyboardAvoidingView>
 
@@ -370,6 +493,8 @@ const styles = StyleSheet.create({
   messagesList: {
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.md,
+    paddingTop: HEADER_HEIGHT + spacing.lg,
+    flexGrow: 1,
   },
   messageRow: {
     flexDirection: 'row',
