@@ -168,6 +168,28 @@ export function ProfileScreen() {
     }
   };
 
+  async function handleUpdatePlan() {
+    setLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not found');
+
+      const { error } = await supabase.from('profiles').upsert({
+        id: user.id,
+        plan: 'premium',
+        updated_at: new Date(),
+      });
+      if (error) throw error;
+
+      await fetchProfile();
+      setToast({ message: 'Plan updated to Premium!', type: 'success', visible: true });
+    } catch (error: any) {
+      setToast({ message: error.message || 'Failed to update plan', type: 'error', visible: true });
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function handleLogout() {
     const { error } = await supabase.auth.signOut();
     if (error) setToast({ message: error.message, type: 'error', visible: true });
@@ -316,20 +338,32 @@ export function ProfileScreen() {
               </View>
 
               {profile.subscriptionTier === 'free' && (
-                <TouchableOpacity
-                  style={styles.upgradeBtn}
-                  onPress={handleUpgrade}
-                  activeOpacity={0.8}
-                >
-                  <LinearGradient
-                    colors={colors.gradients.vibrant}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={styles.upgradeBtnGradient}
+                <>
+                  <TouchableOpacity
+                    style={styles.upgradeBtn}
+                    onPress={handleUpgrade}
+                    activeOpacity={0.8}
                   >
-                    <Text style={styles.upgradeBtnText}>UPGRADE TO PREMIUM</Text>
-                  </LinearGradient>
-                </TouchableOpacity>
+                    <LinearGradient
+                      colors={colors.gradients.vibrant}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={styles.upgradeBtnGradient}
+                    >
+                      <Text style={styles.upgradeBtnText}>UPGRADE TO PREMIUM</Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                  <View style={{ marginTop: spacing.md }}>
+                    <TouchableOpacity
+                      style={styles.updatePlanBtn}
+                      onPress={handleUpdatePlan}
+                      disabled={loading}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.updatePlanBtnText}>UPDATE PLAN TO PREMIUM</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
               )}
             </View>
           )}
@@ -606,6 +640,21 @@ const styles = StyleSheet.create({
     ...typography.labelCaps,
     color: colors.pinkDeep,
     fontSize: 13,
+    letterSpacing: 1,
+  },
+
+  // Update Plan Button
+  updatePlanBtn: {
+    backgroundColor: colors.secondary,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 16,
+    alignItems: 'center',
+  },
+  updatePlanBtnText: {
+    ...typography.labelCaps,
+    color: '#fff',
+    fontSize: 12,
     letterSpacing: 1,
   },
 });
