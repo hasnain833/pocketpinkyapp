@@ -11,7 +11,7 @@ import { PageHeader, Toast } from '../components';
 import { supabase } from '../services/supabase';
 import { botpress } from '../services/botpress';
 
-const UPGRADE_URL = process.env.EXPO_PUBLIC_UPGRADE_URL;
+const UPGRADE_URL = process.env.EXPO_PUBLIC_UPGRADE_URL ?? '';
 
 export function ProfileScreen() {
   const navigation = useNavigation();
@@ -353,16 +353,6 @@ export function ProfileScreen() {
                       <Text style={styles.upgradeBtnText}>UPGRADE TO PREMIUM</Text>
                     </LinearGradient>
                   </TouchableOpacity>
-                  <View style={{ marginTop: spacing.md }}>
-                    <TouchableOpacity
-                      style={styles.updatePlanBtn}
-                      onPress={handleUpdatePlan}
-                      disabled={loading}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={styles.updatePlanBtnText}>UPDATE PLAN TO PREMIUM</Text>
-                    </TouchableOpacity>
-                  </View>
                 </>
               )}
             </View>

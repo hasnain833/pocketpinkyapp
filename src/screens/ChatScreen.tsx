@@ -148,9 +148,6 @@ export function ChatScreen({ navigation, route }: any) {
       const plan = await checkSubscriptionTier(session.user.id);
       const normalizedPlan = plan?.toLowerCase();
       console.log('[ChatScreen] Supabase Subscription Plan Detected:', plan);
-
-      // If we detect a local plan change (e.g. they just upgraded), 
-      // we might want to reset the conversation to force a fresh bot session
       if (cachedSubscriptionTier && cachedSubscriptionTier !== plan) {
         if (normalizedPlan === 'premium') {
           console.log('[ChatScreen] Plan upgraded to premium, resetting conversation...');
@@ -167,10 +164,22 @@ export function ChatScreen({ navigation, route }: any) {
       });
       console.log('[ChatScreen] Botpress User Initialized:', bpUser?.botpressUserId);
 
-      // 3. Explicitly Sync profile to ensure variables are forced
-      await botpress.syncUser({
-        subscriptionTier: plan
-      });
+      // 4. Send Custom Event for State Sync
+      // The Botpress Hook "User Subscription Check" will listen for this event and update internal state.
+      console.log('[ChatScreen] Sending user_data_update event...');
+      const isPremium = normalizedPlan === 'premium';
+      const payload = {
+        tier: normalizedPlan,
+        subscriptionTier: normalizedPlan,
+        isPremium: isPremium,
+        email: session?.user?.email,
+        userId: session?.user?.id
+      };
+
+      // We don't await this so chat can load immediately, but we log errors if any
+      botpress.sendEvent('user_data_update', payload)
+        .catch(err => console.error('[ChatScreen] Failed to send sync event:', err));
+
 
       if (normalizedPlan === 'premium') {
         setToast({ message: `✨ Active Plan : ${plan}`, type: 'success', visible: true });
@@ -231,8 +240,9 @@ export function ChatScreen({ navigation, route }: any) {
     }
 
     let attempts = 0;
-    const maxAttempts = 20; // Increased attempts
-    const seenMessageIds = new Set(messages.map(m => m.id));
+    const maxAttempts = 20;
+    // Snapshot all message IDs currently visible — anything beyond this is "new"
+    const seenMessageIds = new Set(messages.map((m: any) => m.id));
 
     pollingIntervalRef.current = setInterval(async () => {
       attempts++;
@@ -244,27 +254,25 @@ export function ChatScreen({ navigation, route }: any) {
         });
 
         const sorted = filtered.reverse();
+        setMessages(sorted);
 
-        // Deduplicate messages
-        const newMessages = sorted.filter((m: any) => {
-          if (seenMessageIds.has(m.id)) return true;
-          seenMessageIds.add(m.id);
-          return true;
-        });
-
-        setMessages(newMessages);
-
+        // Check if the last message is a NEW bot (incoming) message we haven't seen yet
         const lastMsg = sorted[sorted.length - 1];
-        const isBotMessage = lastMsg && lastMsg.direction === 'incoming';
+        const isNewBotMessage =
+          lastMsg &&
+          lastMsg.direction === 'incoming' &&
+          !lastMsg.id.startsWith('temp-') &&
+          !seenMessageIds.has(lastMsg.id);
 
-        if (isBotMessage && !lastMsg.id.startsWith('temp-')) {
-          if (!seenMessageIds.has(lastMsg.id)) {
-            if (pollingIntervalRef.current) {
-              clearInterval(pollingIntervalRef.current);
-              pollingIntervalRef.current = null;
-            }
-            setIsBotTyping(false);
+        if (isNewBotMessage) {
+          // Mark it as seen so rapid re-polls don't re-trigger the stop
+          seenMessageIds.add(lastMsg.id);
+          if (pollingIntervalRef.current) {
+            clearInterval(pollingIntervalRef.current);
+            pollingIntervalRef.current = null;
           }
+          setIsBotTyping(false);
+          return;
         }
       }
 
@@ -336,6 +344,9 @@ export function ChatScreen({ navigation, route }: any) {
   }, [botpressUserId, startPolling]);
 
   const renderMessage = useCallback(({ item }: { item: any }) => {
+    // Hide system events from UI
+    if (item.payload?.text?.startsWith('[SYSTEM_EVENT]')) return null;
+
     const isUser = item.direction === 'outgoing' || (item.userId && item.userId === botpressUserId);
     const isChoice = item.payload?.type === 'choice';
 
@@ -374,13 +385,6 @@ export function ChatScreen({ navigation, route }: any) {
       </View>
     );
   }, [botpressUserId, handleChoiceSelect]);
-
-  // FlatList optimization: getItemLayout for better scroll performance
-  const getItemLayout = useCallback((data: any, index: number) => ({
-    length: 80, // Approximate message height
-    offset: 80 * index,
-    index,
-  }), []);
 
   const renderFooter = useCallback(() => (
     isBotTyping ? (
@@ -431,7 +435,6 @@ export function ChatScreen({ navigation, route }: any) {
               ListFooterComponent={renderFooter}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled" // Important for scrolling while keyboard is open
-              getItemLayout={getItemLayout}
               removeClippedSubviews={true}
               windowSize={10}
               maxToRenderPerBatch={10}
