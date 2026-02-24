@@ -97,7 +97,7 @@ export function AuthScreen() {
                 onError={(message) => setToast({ message, type: 'error', visible: true })}
             />
             <LinearGradient
-                colors={[colors.deepNight, colors.dark]}
+                colors={[colors.cream, colors.blush]}
                 style={styles.gradient}
             >
                 <KeyboardAvoidingView
@@ -117,14 +117,14 @@ export function AuthScreen() {
                         <View style={styles.header}>
                             <Text style={styles.bgLogo}>Pink</Text>
                             <Text style={styles.editorialHeadline}>
-                                {isSignUp ? 'Join the' : 'Welcome'}
+                                {isSignUp ? 'Join the' : 'Welcome back to'}
                                 {'\n'}
-                                <Text style={{ color: colors.cyberPink }}>Standards.</Text>
+                                <Text style={{ color: colors.pinkAccent }}>Pinky.</Text>
                             </Text>
                             <Text style={styles.subheadline}>
                                 {isSignUp
-                                    ? 'Start your journey with your AI big sister.'
-                                    : 'Your vetting toolkit is waiting for you.'}
+                                    ? 'Start your journey with your AI companion.'
+                                    : 'Log in to access your elite vetting tools.'}
                             </Text>
                         </View>
 
@@ -135,7 +135,7 @@ export function AuthScreen() {
                                     <TextInput
                                         style={styles.input}
                                         placeholder="Jessica Smith"
-                                        placeholderTextColor="rgba(255,255,255,0.3)"
+                                        placeholderTextColor="rgba(61,58,55,0.3)"
                                         value={name}
                                         onChangeText={setName}
                                         autoCapitalize="words"
@@ -148,7 +148,7 @@ export function AuthScreen() {
                                 <TextInput
                                     style={styles.input}
                                     placeholder="queen@example.com"
-                                    placeholderTextColor="rgba(255,255,255,0.3)"
+                                    placeholderTextColor="rgba(61,58,55,0.3)"
                                     value={email}
                                     onChangeText={setEmail}
                                     autoCapitalize="none"
@@ -161,7 +161,7 @@ export function AuthScreen() {
                                 <TextInput
                                     style={styles.input}
                                     placeholder="••••••••"
-                                    placeholderTextColor="rgba(255,255,255,0.3)"
+                                    placeholderTextColor="rgba(61,58,55,0.3)"
                                     value={password}
                                     onChangeText={setPassword}
                                     secureTextEntry
@@ -174,7 +174,7 @@ export function AuthScreen() {
                                     <TextInput
                                         style={styles.input}
                                         placeholder="••••••••"
-                                        placeholderTextColor="rgba(255,255,255,0.3)"
+                                        placeholderTextColor="rgba(61,58,55,0.3)"
                                         value={confirmPassword}
                                         onChangeText={setConfirmPassword}
                                         secureTextEntry
@@ -204,16 +204,14 @@ export function AuthScreen() {
                                     style={styles.buttonGradient}
                                 >
                                     {loading ? (
-                                        <ActivityIndicator color={colors.textOnDark} />
+                                        <ActivityIndicator color={colors.warmWhite} />
                                     ) : (
                                         <Text style={styles.buttonText}>
-                                            {isSignUp ? 'SIGN UP' : 'SIGN IN'}
+                                            {isSignUp ? 'REGISTER' : 'SIGN IN'}
                                         </Text>
                                     )}
                                 </LinearGradient>
                             </TouchableOpacity>
-
-
 
                             <TouchableOpacity
                                 style={styles.switchButton}
@@ -222,7 +220,7 @@ export function AuthScreen() {
                                 <Text style={styles.switchText}>
                                     {isSignUp
                                         ? 'Already have an account? Sign In'
-                                        : "Don't have an account? Sign Up"}
+                                        : "New here? Create an account"}
                                 </Text>
                             </TouchableOpacity>
                         </View>
@@ -248,74 +246,77 @@ const styles = StyleSheet.create({
     },
     bgLogo: {
         ...typography.script,
-        fontSize: moderateScale(120),
-        color: colors.cyberPink,
-        opacity: 0.1,
+        fontSize: moderateScale(140),
+        color: colors.pinkAccent,
+        opacity: 0.05,
         position: 'absolute',
-        top: verticalScale(-40),
-        left: horizontalScale(-20),
+        top: verticalScale(-50),
+        left: horizontalScale(-30),
         zIndex: 0,
     },
     editorialHeadline: {
         ...typography.display,
-        color: colors.textOnDark,
+        color: colors.textPrimary,
         zIndex: 1,
     },
     subheadline: {
         ...typography.body,
-        color: colors.textOnDark,
-        opacity: 0.6,
+        color: colors.textSecondary,
+        opacity: 0.8,
         marginTop: spacing.md,
-        maxWidth: '80%',
+        maxWidth: '85%',
     },
     form: {
-        gap: spacing.md, // Reduced from xl
+        gap: spacing.lg,
     },
     inputWrapper: {
-        gap: 4, // Reduced from spacing.sm (8)
+        gap: 6,
     },
     labelCaps: {
         ...typography.labelCaps,
-        color: colors.cyberGold,
+        color: colors.gold,
+        fontSize: responsiveFontSize(11),
+        letterSpacing: 2,
     },
     input: {
-        backgroundColor: 'rgba(255,255,255,0.05)',
+        backgroundColor: 'rgba(0,0,0,0.02)',
         borderRadius: radii.input,
         padding: spacing.md,
-        color: colors.textOnDark,
+        color: colors.textPrimary,
         ...typography.body,
         borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.1)',
-        fontSize: responsiveFontSize(14),
+        borderColor: 'rgba(0,0,0,0.05)',
+        fontSize: responsiveFontSize(15),
     },
     button: {
-        marginTop: spacing.lg,
-        shadowColor: colors.cyberPink,
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.4,
-        shadowRadius: 15,
-        elevation: 10,
+        marginTop: spacing.xl,
+        shadowColor: colors.pinkAccent,
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.2,
+        shadowRadius: 12,
+        elevation: 6,
     },
     buttonGradient: {
         padding: spacing.xl,
-        borderRadius: 20,
+        borderRadius: 16,
         alignItems: 'center',
         justifyContent: 'center',
     },
     buttonText: {
         ...typography.labelCaps,
-        color: colors.textOnDark,
-        fontSize: responsiveFontSize(16),
-        letterSpacing: 4,
+        color: colors.warmWhite,
+        fontSize: responsiveFontSize(15),
+        letterSpacing: 3,
+        fontWeight: '700',
     },
     switchButton: {
         alignItems: 'center',
-        marginTop: spacing.md,
+        marginTop: spacing.lg,
     },
     switchText: {
         ...typography.bodySmall,
-        color: colors.textOnDark,
-        opacity: 0.6,
+        color: colors.textSecondary,
+        fontWeight: '500',
     },
     forgotPasswordButton: {
         alignSelf: 'flex-end',
@@ -323,8 +324,9 @@ const styles = StyleSheet.create({
     },
     forgotPasswordText: {
         ...typography.bodySmall,
-        color: colors.cyberPink,
+        color: colors.pinkAccent,
         fontSize: responsiveFontSize(13),
+        fontWeight: '600',
     },
 
 });

@@ -46,13 +46,13 @@ export function ConfirmationModal({
                     activeOpacity={1}
                     onPress={onCancel}
                 />
-                <BlurView intensity={60} tint="dark" style={styles.modalContainer}>
+                <BlurView intensity={30} tint="light" style={styles.modalContainer}>
                     <View style={styles.iconContainer}>
                         <View style={[styles.iconCircle, isDestructive && styles.destructiveIconCircle]}>
                             <Feather
                                 name={isDestructive ? "trash-2" : "help-circle"}
-                                size={28}
-                                color={isDestructive ? colors.cyberPink : colors.cyberGold}
+                                size={24}
+                                color={isDestructive ? colors.pinkAccent : colors.gold}
                             />
                         </View>
                     </View>
@@ -88,7 +88,7 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: 'rgba(0,0,0,0.6)',
+        backgroundColor: 'rgba(45, 42, 39, 0.4)',
     },
     backdrop: {
         position: 'absolute',
@@ -100,45 +100,51 @@ const styles = StyleSheet.create({
     modalContainer: {
         width: '85%',
         maxWidth: horizontalScale(340),
-        backgroundColor: 'rgba(20, 20, 20, 0.85)',
-        borderRadius: radii.card,
+        backgroundColor: colors.cream,
+        borderRadius: 24,
         padding: spacing.xl,
         borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.1)',
+        borderColor: 'rgba(0,0,0,0.05)',
         alignItems: 'center',
         overflow: 'hidden',
+        shadowColor: colors.charcoal,
+        shadowOffset: { width: 0, height: 15 },
+        shadowOpacity: 0.1,
+        shadowRadius: 20,
+        elevation: 10,
     },
     iconContainer: {
         marginBottom: spacing.lg,
     },
     iconCircle: {
-        width: moderateScale(60),
-        height: moderateScale(60),
-        borderRadius: moderateScale(30),
-        backgroundColor: 'rgba(255, 184, 0, 0.1)',
+        width: moderateScale(56),
+        height: moderateScale(56),
+        borderRadius: moderateScale(28),
+        backgroundColor: 'rgba(201, 165, 92, 0.1)',
         justifyContent: 'center',
         alignItems: 'center',
         borderWidth: 1,
-        borderColor: 'rgba(255, 184, 0, 0.2)',
+        borderColor: 'rgba(201, 165, 92, 0.15)',
     },
     destructiveIconCircle: {
-        backgroundColor: 'rgba(255, 45, 85, 0.1)',
-        borderColor: 'rgba(255, 45, 85, 0.2)',
+        backgroundColor: 'rgba(212, 115, 122, 0.1)',
+        borderColor: 'rgba(212, 115, 122, 0.15)',
     },
     modalTitle: {
-        ...typography.headlineSmall,
-        color: colors.textOnDark,
-        fontSize: responsiveFontSize(20),
+        ...typography.labelCaps,
+        color: colors.textPrimary,
+        fontSize: responsiveFontSize(16),
         textAlign: 'center',
         marginBottom: spacing.sm,
+        letterSpacing: 1.5,
     },
     modalMessage: {
         ...typography.body,
-        color: colors.textOnDark,
-        opacity: 0.7,
-        fontSize: responsiveFontSize(15),
+        color: colors.textSecondary,
+        opacity: 0.8,
+        fontSize: responsiveFontSize(14),
         textAlign: 'center',
-        lineHeight: responsiveFontSize(22),
+        lineHeight: responsiveFontSize(20),
         marginBottom: spacing.xl,
     },
     buttonRow: {
@@ -149,34 +155,41 @@ const styles = StyleSheet.create({
     cancelButton: {
         flex: 1,
         paddingVertical: spacing.md,
-        borderRadius: radii.button,
-        backgroundColor: 'rgba(255,255,255,0.05)',
+        borderRadius: 14,
+        backgroundColor: 'rgba(0,0,0,0.03)',
         alignItems: 'center',
         justifyContent: 'center',
         borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.1)',
+        borderColor: 'rgba(0,0,0,0.05)',
     },
     cancelButtonText: {
         ...typography.labelCaps,
-        color: colors.textOnDark,
-        fontSize: responsiveFontSize(13),
-        opacity: 0.8,
+        color: colors.textSecondary,
+        fontSize: responsiveFontSize(12),
+        letterSpacing: 1,
     },
     confirmButton: {
-        flex: 1.5,
+        flex: 1.2,
         paddingVertical: spacing.md,
-        borderRadius: radii.button,
-        backgroundColor: colors.primary,
+        borderRadius: 14,
+        backgroundColor: colors.charcoal,
         alignItems: 'center',
         justifyContent: 'center',
+        shadowColor: colors.charcoal,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
+        elevation: 4,
     },
     destructiveConfirmButton: {
-        backgroundColor: colors.cyberPink || '#FF2D55',
+        backgroundColor: colors.pinkAccent,
+        shadowColor: colors.pinkAccent,
     },
     confirmButtonText: {
         ...typography.labelCaps,
-        color: colors.textOnDark,
-        fontSize: responsiveFontSize(13),
+        color: colors.warmWhite,
+        fontSize: responsiveFontSize(12),
         fontWeight: '700',
+        letterSpacing: 1,
     },
 });

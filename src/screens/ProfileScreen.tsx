@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PageHeader, Toast } from '../components';
 import { supabase } from '../services/supabase';
 import { botpress } from '../services/botpress';
+import { emailService } from '../services/email';
 
 const UPGRADE_URL = process.env.EXPO_PUBLIC_UPGRADE_URL ?? '';
 
@@ -31,6 +32,9 @@ export function ProfileScreen() {
     newPassword: '',
     confirmPassword: '',
   });
+
+  // Password Validation Regex: At least 8 chars, 1 uppercase, 1 special char
+  const passwordRegex = /^(?=.*[A-Z])(?=.*[!@#$&*])(?=.{8,})/;
 
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error'; visible: boolean }>({
     message: '',
@@ -113,8 +117,8 @@ export function ProfileScreen() {
         if (passwordState.newPassword !== passwordState.confirmPassword) {
           throw new Error('Passwords do not match');
         }
-        if (passwordState.newPassword.length < 6) {
-          throw new Error('Password must be at least 6 characters');
+        if (!passwordRegex.test(passwordState.newPassword)) {
+          throw new Error('Password must be at least 8 characters, 1 uppercase, and 1 special character (!@#$&*).');
         }
 
         const { error: passwordError } = await supabase.auth.updateUser({
@@ -149,11 +153,12 @@ export function ProfileScreen() {
   async function handleForgotPassword() {
     if (!profile.email) return;
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(profile.email, {
-        redirectTo: 'https://pocket-pinky-vetting-app.vercel.app/reset-password', // Update with your actual URL
-      });
-      if (error) throw error;
-      setToast({ message: 'Password reset email sent!', type: 'success', visible: true });
+      const recoveryLink = `https://pocket-pinky-vetting-app.vercel.app/reset-password?email=${profile.email}`;
+      const result = await emailService.sendPasswordResetEmail(profile.email, recoveryLink);
+
+      if (!result.success) throw new Error(result.error);
+
+      setToast({ message: 'Reset link sent!', type: 'success', visible: true });
     } catch (error: any) {
       setToast({ message: error.message || 'Error sending reset email', type: 'error', visible: true });
     }
@@ -275,6 +280,11 @@ export function ProfileScreen() {
                 placeholderTextColor={colors.textMuted}
                 secureTextEntry
               />
+              {passwordState.newPassword.length > 0 && !passwordRegex.test(passwordState.newPassword) && (
+                <Text style={styles.validationHint}>
+                  Min. 8 characters, 1 uppercase, 1 special char.
+                </Text>
+              )}
             </View>
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Confirm New Password</Text>
@@ -286,6 +296,14 @@ export function ProfileScreen() {
                 placeholderTextColor={colors.textMuted}
                 secureTextEntry
               />
+              {passwordState.confirmPassword.length > 0 &&
+                passwordState.newPassword !== passwordState.confirmPassword && (
+                  <Text style={styles.errorHint}>Passwords do not match</Text>
+                )}
+              {passwordState.confirmPassword.length > 0 &&
+                passwordState.newPassword === passwordState.confirmPassword && (
+                  <Text style={styles.successHint}>Passwords match</Text>
+                )}
             </View>
 
             <TouchableOpacity
@@ -465,6 +483,25 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_400Regular',
     borderWidth: 1,
     borderColor: colors.border,
+  },
+  validationHint: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    fontSize: 10,
+    marginTop: 4,
+    opacity: 0.7,
+  },
+  errorHint: {
+    ...typography.caption,
+    color: colors.pinkDeep,
+    fontSize: 10,
+    marginTop: 4,
+  },
+  successHint: {
+    ...typography.caption,
+    color: '#4CAF50',
+    fontSize: 10,
+    marginTop: 4,
   },
   forgotPasswordLink: {
     alignSelf: 'flex-end',

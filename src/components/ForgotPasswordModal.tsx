@@ -16,6 +16,7 @@ import { Feather } from '@expo/vector-icons';
 import { colors, spacing, typography, radii } from '../theme';
 import { horizontalScale, verticalScale, moderateScale, responsiveFontSize } from '../theme/responsive';
 import { supabase } from '../services/supabase';
+import { emailService } from '../services/email';
 
 interface ForgotPasswordModalProps {
     visible: boolean;
@@ -34,7 +35,6 @@ export function ForgotPasswordModal({ visible, onClose, onSuccess, onError }: Fo
             return;
         }
 
-        // Basic email validation
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(email)) {
             onError('Please enter a valid email address');
@@ -43,13 +43,13 @@ export function ForgotPasswordModal({ visible, onClose, onSuccess, onError }: Fo
 
         setLoading(true);
         try {
-            const { error } = await supabase.auth.resetPasswordForEmail(email, {
-                redirectTo: 'pinkypocket://reset-password',
-            });
+            const recoveryLink = `https://pocket-pinky-vetting-app.vercel.app/reset-password?email=${email}`;
 
-            if (error) throw error;
+            const result = await emailService.sendPasswordResetEmail(email, recoveryLink);
 
-            onSuccess('Password reset link sent! Check your email.');
+            if (!result.success) throw new Error(result.error);
+
+            onSuccess('Reset link sent!');
             setEmail('');
             onClose();
         } catch (error: any) {
@@ -75,11 +75,11 @@ export function ForgotPasswordModal({ visible, onClose, onSuccess, onError }: Fo
                     activeOpacity={1}
                     onPress={onClose}
                 />
-                <BlurView intensity={40} tint="dark" style={styles.modalContainer}>
+                <BlurView intensity={20} tint="light" style={styles.modalContainer}>
                     <View style={styles.modalHeader}>
                         <Text style={styles.modalTitle}>RESET PASSWORD</Text>
                         <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-                            <Feather name="x" size={24} color={colors.textOnDark} />
+                            <Feather name="x" size={20} color={colors.textPrimary} />
                         </TouchableOpacity>
                     </View>
 
@@ -93,7 +93,7 @@ export function ForgotPasswordModal({ visible, onClose, onSuccess, onError }: Fo
                             <TextInput
                                 style={styles.input}
                                 placeholder="queen@example.com"
-                                placeholderTextColor="rgba(255,255,255,0.3)"
+                                placeholderTextColor="rgba(61,58,55,0.3)"
                                 value={email}
                                 onChangeText={setEmail}
                                 autoCapitalize="none"
@@ -115,10 +115,10 @@ export function ForgotPasswordModal({ visible, onClose, onSuccess, onError }: Fo
                                 style={styles.buttonGradient}
                             >
                                 {loading ? (
-                                    <ActivityIndicator color={colors.textOnDark} />
+                                    <ActivityIndicator color={colors.warmWhite} />
                                 ) : (
                                     <>
-                                        <Feather name="send" size={16} color={colors.textOnDark} />
+                                        <Feather name="send" size={16} color={colors.warmWhite} />
                                         <Text style={styles.buttonText}>SEND RESET LINK</Text>
                                     </>
                                 )}
@@ -136,7 +136,7 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: 'rgba(0,0,0,0.7)',
+        backgroundColor: 'rgba(45,42,39,0.4)',
     },
     backdrop: {
         position: 'absolute',
@@ -148,12 +148,17 @@ const styles = StyleSheet.create({
     modalContainer: {
         width: '90%',
         maxWidth: horizontalScale(400),
-        backgroundColor: colors.dark,
-        borderRadius: radii.card,
+        backgroundColor: colors.cream,
+        borderRadius: 24,
         padding: spacing.xl,
         borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.1)',
+        borderColor: 'rgba(0,0,0,0.05)',
         overflow: 'hidden',
+        shadowColor: colors.charcoal,
+        shadowOffset: { width: 0, height: 20 },
+        shadowOpacity: 0.1,
+        shadowRadius: 30,
+        elevation: 15,
     },
     modalHeader: {
         flexDirection: 'row',
@@ -162,13 +167,14 @@ const styles = StyleSheet.create({
         marginBottom: spacing.lg,
     },
     modalTitle: {
-        ...typography.headlineSmall,
-        color: colors.textOnDark,
-        fontSize: responsiveFontSize(18),
+        ...typography.labelCaps,
+        color: colors.gold,
+        fontSize: responsiveFontSize(16),
+        letterSpacing: 2,
     },
     closeButton: {
         padding: spacing.xs,
-        backgroundColor: 'rgba(255,255,255,0.1)',
+        backgroundColor: 'rgba(0,0,0,0.05)',
         borderRadius: 20,
     },
     modalBody: {
@@ -176,39 +182,42 @@ const styles = StyleSheet.create({
     },
     instructionText: {
         ...typography.body,
-        color: colors.textOnDark,
-        opacity: 0.7,
+        color: colors.textSecondary,
+        opacity: 0.8,
         fontSize: responsiveFontSize(14),
         lineHeight: responsiveFontSize(20),
+        marginBottom: spacing.xs,
     },
     inputWrapper: {
-        gap: spacing.xs,
+        gap: 6,
     },
     labelCaps: {
         ...typography.labelCaps,
-        color: colors.cyberGold,
+        color: colors.gold,
+        fontSize: responsiveFontSize(11),
+        letterSpacing: 1.5,
     },
     input: {
-        backgroundColor: 'rgba(255,255,255,0.05)',
+        backgroundColor: 'rgba(0,0,0,0.02)',
         borderRadius: radii.input,
         padding: spacing.md,
-        color: colors.textOnDark,
+        color: colors.textPrimary,
         ...typography.body,
         borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.1)',
+        borderColor: 'rgba(0,0,0,0.05)',
         fontSize: responsiveFontSize(14),
     },
     button: {
         marginTop: spacing.md,
-        shadowColor: colors.cyberPink,
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.4,
-        shadowRadius: 15,
-        elevation: 10,
+        shadowColor: colors.pinkAccent,
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.2,
+        shadowRadius: 12,
+        elevation: 6,
     },
     buttonGradient: {
         padding: spacing.lg,
-        borderRadius: 20,
+        borderRadius: 16,
         alignItems: 'center',
         justifyContent: 'center',
         flexDirection: 'row',
@@ -216,7 +225,9 @@ const styles = StyleSheet.create({
     },
     buttonText: {
         ...typography.labelCaps,
-        color: colors.textOnDark,
+        color: colors.warmWhite,
         fontSize: responsiveFontSize(14),
+        letterSpacing: 2,
+        fontWeight: '700',
     },
 });
