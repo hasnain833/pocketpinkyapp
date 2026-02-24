@@ -18,7 +18,9 @@
                 "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNrcW5hdGNobXdvbWh5YWJlaWltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAxODYzMzMsImV4cCI6MjA4NTc2MjMzM30.dksrzg62kSYuFG6auyqHpc8mkUxNnUdyhP8kkXT3wi8",
                 "EXPO_PUBLIC_PROJECT_ID": "64ace30f-9e44-4903-b508-550b7ebc15bb",
                 "EXPO_PUBLIC_UPGRADE_URL": "https://pocket-pinky-vetting-app.vercel.app",
-                "EXPO_PUBLIC_BOTPRESS_CONFIG_SCRIPT_URL": "https://files.bpcontent.cloud/2026/01/28/18/20260128185834-JTVE96B4.js"
+                "EXPO_PUBLIC_BOTPRESS_CONFIG_SCRIPT_URL": "https://files.bpcontent.cloud/2026/01/28/18/20260128185834-JTVE96B4.js",
+                "EXPO_PUBLIC_BOTPRESS_BOT_ID": "0688dbd4-7edd-42f1-b072-7d76b8d9ebc0",
+                "EXPO_PUBLIC_BOTPRESS_CLIENT_ID": "98c27071-e27d-4d59-8210-c3d6a86c0344"
             }
         },
         "production": {
@@ -28,7 +30,9 @@
                 "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNrcW5hdGNobXdvbWh5YWJlaWltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAxODYzMzMsImV4cCI6MjA4NTc2MjMzM30.dksrzg62kSYuFG6auyqHpc8mkUxNnUdyhP8kkXT3wi8",
                 "EXPO_PUBLIC_PROJECT_ID": "64ace30f-9e44-4903-b508-550b7ebc15bb",
                 "EXPO_PUBLIC_UPGRADE_URL": "https://pocket-pinky-vetting-app.vercel.app",
-                "EXPO_PUBLIC_BOTPRESS_CONFIG_SCRIPT_URL": "https://files.bpcontent.cloud/2026/01/28/18/20260128185834-JTVE96B4.js"
+                "EXPO_PUBLIC_BOTPRESS_CONFIG_SCRIPT_URL": "https://files.bpcontent.cloud/2026/01/28/18/20260128185834-JTVE96B4.js",
+                "EXPO_PUBLIC_BOTPRESS_BOT_ID": "0688dbd4-7edd-42f1-b072-7d76b8d9ebc0",
+                "EXPO_PUBLIC_BOTPRESS_CLIENT_ID": "98c27071-e27d-4d59-8210-c3d6a86c0344"
             }
         }
     },
