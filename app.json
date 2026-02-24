@@ -1,6 +1,7 @@
 {
   "expo": {
     "name": "Pink Pill",
+    "owner": "hasnain87",
     "slug": "pinky-pocket",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -42,7 +43,7 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "64ace30f-9e44-4903-b508-550b7ebc15bb"
+        "projectId": "81f578e5-64e4-4c95-9923-1fd6c10ac26d"
       }
     }
   }
