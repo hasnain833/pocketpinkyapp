@@ -23,6 +23,12 @@
                 "EXPO_PUBLIC_BOTPRESS_CLIENT_ID": "98c27071-e27d-4d59-8210-c3d6a86c0344"
             }
         },
+        "simulator": {
+            "extends": "preview",
+            "ios": {
+                "simulator": true
+            }
+        },
         "production": {
             "autoIncrement": true,
             "env": {
